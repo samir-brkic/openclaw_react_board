@@ -7,7 +7,7 @@ Kopiere diesen Prompt und gib ihn deinem Clawdbot/openclaw Agent:
 ## Prompt für automatisches Setup:
 
 ```
-Bitte installiere und konfiguriere das Molt Kanban Board von GitHub für mich:
+Bitte installiere und konfiguriere dieses speziell für OpenClaw entwickelte Projektmanagement inkl. Kanban Board, File Explorer und Kontext-Manager von GitHub für mich. Darauf arbeiten wir zukünftig gemeinsam an unseren Softwareprojekten:
 
 SETUP:
 1. cd ~/clawd

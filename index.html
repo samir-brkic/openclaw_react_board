@@ -2629,11 +2629,19 @@
         
         // Öffnet Chat mit Task-Kontext (aus Task-Modal)
         async function openTaskInChat() {
-            if (!activeProjectId || !currentTaskId) return;
+            console.log('[DEBUG] openTaskInChat called, activeProjectId:', activeProjectId, 'currentTaskId:', currentTaskId);
+            
+            if (!activeProjectId || !currentTaskId) {
+                console.log('[DEBUG] Missing projectId or taskId!');
+                return;
+            }
             
             const allProjects = await fetchProjects();
             const project = allProjects.find(p => p.id === activeProjectId);
             const task = project?.tasks?.find(t => t.id === currentTaskId);
+            
+            console.log('[DEBUG] Found task:', task?.title, 'taskId:', currentTaskId);
+            
             if (!task) return;
             
             // Speichere Task-Kontext
@@ -2652,6 +2660,8 @@
             
             // Setze Projekt im Dropdown
             document.getElementById('chatProjectSelect').value = chatProjectId;
+            
+            console.log('[DEBUG] Creating session with taskId:', currentTaskId);
             
             // Erstelle neue Session mit Task-Kontext
             await createChatSession(`Task: ${task.title.slice(0, 40)}`, currentTaskId);

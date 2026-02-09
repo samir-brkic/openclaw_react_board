@@ -317,9 +317,10 @@ app.post('/api/activity', (req, res) => {
     }
 });
 
-// Get feature file content
-app.get('/api/projects/:projectId/features/:featureId', (req, res) => {
-    const { projectId, featureId } = req.params;
+// Get feature file content by task ID
+// Looks up the task's featureFile field and loads that file
+app.get('/api/projects/:projectId/features/:taskId', (req, res) => {
+    const { projectId, taskId } = req.params;
     const data = readData();
     const project = data.projects.find(p => p.id === projectId);
 
@@ -331,32 +332,42 @@ app.get('/api/projects/:projectId/features/:featureId', (req, res) => {
         return res.status(400).json({ error: 'Kein Projektpfad konfiguriert' });
     }
 
-    try {
-        const featuresPath = path.join(project.projectPath, 'features');
-        const files = fs.readdirSync(featuresPath);
-        const featureFile = files.find(f => f.startsWith(featureId) && f.endsWith('.md'));
+    // Find the task to get its featureFile
+    const task = project.tasks?.find(t => t.id === taskId);
+    if (!task) {
+        return res.status(404).json({ error: 'Task nicht gefunden' });
+    }
 
-        if (!featureFile) {
-            return res.status(404).json({ error: 'Feature-Datei nicht gefunden' });
+    if (!task.featureFile) {
+        return res.status(404).json({ error: 'Keine Feature-Datei verknüpft' });
+    }
+
+    try {
+        // featureFile is stored as "features/KB-002-name.md" - resolve it relative to projectPath
+        const filePath = path.join(project.projectPath, task.featureFile);
+        
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'Feature-Datei nicht gefunden', path: task.featureFile });
         }
 
-        const filePath = path.join(featuresPath, featureFile);
         const content = fs.readFileSync(filePath, 'utf8');
+        const filename = path.basename(task.featureFile);
 
         res.json({ 
-            id: featureId,
-            filename: featureFile,
+            id: taskId,
+            filename: filename,
             content: content,
-            path: filePath
+            path: filePath,
+            featureFile: task.featureFile
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
 
-// Update feature file content
-app.put('/api/projects/:projectId/features/:featureId', (req, res) => {
-    const { projectId, featureId } = req.params;
+// Update feature file content by task ID
+app.put('/api/projects/:projectId/features/:taskId', (req, res) => {
+    const { projectId, taskId } = req.params;
     const { content } = req.body;
     const data = readData();
     const project = data.projects.find(p => p.id === projectId);
@@ -369,30 +380,38 @@ app.put('/api/projects/:projectId/features/:featureId', (req, res) => {
         return res.status(400).json({ error: 'Kein Projektpfad konfiguriert' });
     }
 
-    try {
-        const featuresPath = path.join(project.projectPath, 'features');
-        const files = fs.readdirSync(featuresPath);
-        const featureFile = files.find(f => f.startsWith(featureId) && f.endsWith('.md'));
+    // Find the task to get its featureFile
+    const task = project.tasks?.find(t => t.id === taskId);
+    if (!task) {
+        return res.status(404).json({ error: 'Task nicht gefunden' });
+    }
 
-        if (!featureFile) {
-            return res.status(404).json({ error: 'Feature-Datei nicht gefunden' });
+    if (!task.featureFile) {
+        return res.status(404).json({ error: 'Keine Feature-Datei verknüpft' });
+    }
+
+    try {
+        // featureFile is stored as "features/KB-002-name.md" - resolve it relative to projectPath
+        const filePath = path.join(project.projectPath, task.featureFile);
+        
+        if (!fs.existsSync(filePath)) {
+            return res.status(404).json({ error: 'Feature-Datei nicht gefunden', path: task.featureFile });
         }
 
-        const filePath = path.join(featuresPath, featureFile);
         fs.writeFileSync(filePath, content, 'utf8');
+        const filename = path.basename(task.featureFile);
 
-        // Update task title from first line
+        // Update task title from first line if desired
         const firstLine = content.split('\n')[0].replace(/^#+\s*/, '');
-        const task = project.tasks.find(t => t.id === featureId);
-        if (task && firstLine) {
+        if (firstLine) {
             task.title = firstLine;
             writeData(data);
         }
 
         res.json({ 
             success: true,
-            id: featureId,
-            filename: featureFile,
+            id: taskId,
+            filename: filename,
             message: 'Feature aktualisiert'
         });
     } catch (error) {
@@ -1005,7 +1024,12 @@ app.post('/api/projects/:projectId/chat/sessions/:sessionId/messages', async (re
     const task = contextTaskId ? project.tasks?.find(t => t.id === contextTaskId) : null;
     
     // Build comprehensive system prompt with all context
-    let systemPrompt = `Du bist ein Entwickler-Agent für das Kanban Board. Du arbeitest nach dem Agent-Workflow.
+    let systemPrompt = `Du bist ein fokussierter Entwickler-Agent für das Kanban Board.
+
+# WICHTIG - Projekt-Isolation
+Du arbeitest NUR am Projekt "${project.name}". 
+Erwähne KEINE anderen Projekte (wie Lernity, etc.) - sie sind nicht relevant für diese Aufgabe.
+Halte dich strikt an den aktuellen Task-Kontext.
 
 # Aktueller Kontext
 
@@ -1050,6 +1074,8 @@ Antworte auf Deutsch. Sei präzise und zeige deinen Denkprozess.`;
         ...session.messages.map(m => ({ role: m.role, content: m.content }))
     ];
     
+    console.log('[CHAT] Sending to Gateway, messages:', messages.length, 'user:', `kanban-${projectId}-${sessionId}`);
+    
     // Stream response from Gateway
     const wantStream = req.query.stream === 'true' || req.headers.accept === 'text/event-stream';
     
@@ -1061,6 +1087,8 @@ Antworte auf Deutsch. Sei präzise und zeige deinen Denkprozess.`;
         res.setHeader('X-Accel-Buffering', 'no');
         res.flushHeaders();
         
+        console.log('[CHAT] Starting SSE stream...');
+        
         // Keepalive pings
         const keepalive = setInterval(() => {
             res.write(': keepalive\n\n');
@@ -1069,6 +1097,8 @@ Antworte auf Deutsch. Sei präzise und zeige deinen Denkprozess.`;
         try {
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 300000); // 5 min
+            
+            console.log('[CHAT] Calling Gateway...');
             
             // Use isolated session per project-chat-session (not main session!)
             const response = await fetch(`${OPENCLAW_GATEWAY_URL}/v1/chat/completions`, {
@@ -1088,6 +1118,8 @@ Antworte auf Deutsch. Sei präzise und zeige deinen Denkprozess.`;
             
             clearTimeout(timeout);
             
+            console.log('[CHAT] Gateway response status:', response.status);
+            
             if (!response.ok) {
                 clearInterval(keepalive);
                 const errorText = await response.text();
@@ -1097,14 +1129,27 @@ Antworte auf Deutsch. Sei präzise und zeige deinen Denkprozess.`;
                 return;
             }
             
+            console.log('[CHAT] Starting to read stream...');
+            
             let fullContent = '';
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
+            let lastActivity = Date.now();
+            
+            // Check for stalled connection
+            const stallCheck = setInterval(() => {
+                if (Date.now() - lastActivity > 60000) {
+                    console.log('[CHAT] Connection stalled, closing');
+                    clearInterval(stallCheck);
+                    reader.cancel();
+                }
+            }, 5000);
             
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
                 
+                lastActivity = Date.now();
                 const chunk = decoder.decode(value);
                 const lines = chunk.split('\n');
                 
@@ -1126,6 +1171,8 @@ Antworte auf Deutsch. Sei präzise und zeige deinen Denkprozess.`;
                     }
                 }
             }
+            
+            clearInterval(stallCheck);
             
             // Save assistant message
             if (fullContent) {

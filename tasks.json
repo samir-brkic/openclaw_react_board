@@ -104,8 +104,8 @@
         {
           "id": "52ad5f9c",
           "title": "Feature-Spec Verknüpfung im Task anzeigen",
-          "description": "**Status:** 🟡 In Progress (QA Testing erforderlich)\n**Agent:** Frontend Developer\n**Feature-Spec:** features/KB-002-feature-spec-link.md\n\n## Ziel\nTasks sollen eine sichtbare Verknüpfung zur Feature-Spec Datei haben.\n\n## Was wurde gemacht\n- ✅ Feature-File Input im Task Modal\n- ✅ Status-Anzeige (verknüpft/nicht verknüpft/nicht gefunden)\n- ✅ \"Öffnen\" und \"Auswählen...\" Buttons\n- ✅ Klickbares Feature-File auf dem Board (📄 Link)\n- ✅ API-Aufrufe korrigiert (Bug-Fix)\n\n## Bug-Fix\nDie Feature-File Funktionen verwendeten das falsche API-Format. Korrigiert auf `/api/projects/:id/files/...`.\n\n## Was steht aus\n- User Testing durch Samir\n- QA Checkliste abarbeiten\n\n## QA Testing Checklist\n- [ ] Task mit Feature-File öffnen → Feature-Inhalt wird angezeigt\n- [ ] \"Öffnen\" Button klicken → File Browser öffnet sich\n- [ ] Feature-File Link auf Board klicken → File Browser mit Datei\n- [ ] \"Auswählen...\" Button → Liste der Feature-Dateien\n- [ ] Nicht-existierende Datei → Warnung anzeigen",
-          "status": "in-progress",
+          "description": "**Status:** ✅ Done\n**Agent:** Frontend Developer\n**Getestet von:** Samir\n\n## Implementiert\n- ✅ Feature-File Input im Task Modal\n- ✅ Status-Anzeige (verknüpft/nicht verknüpft/nicht gefunden)\n- ✅ \"Öffnen\" und \"Auswählen...\" Buttons\n- ✅ Klickbares Feature-File auf dem Board (📄 Link)\n- ✅ API Bug-Fix\n\n## QA Testing ✅\nAlle Tests bestanden am 11.2.2026.",
+          "status": "done",
           "priority": "medium",
           "date": "9.2.2026",
           "createdAt": "2026-02-09T01:37:02.370Z",

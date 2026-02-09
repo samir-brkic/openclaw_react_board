@@ -1060,8 +1060,15 @@ ${task.description || 'Keine Beschreibung'}
 6. Überschreibe NIEMALS die ursprünglichen Anforderungen im Task - füge Status-Updates hinzu!
 
 # API-Endpunkte
+- Neuen Task erstellen: POST http://localhost:3000/api/projects/${projectId}/tasks
+  Body: {"title": "...", "description": "...", "status": "todo", "priority": "low|medium|high"}
 - Task-Status updaten: PUT http://localhost:3000/api/projects/${projectId}/tasks/${contextTaskId || 'TASK_ID'}
-- Body: {"status": "in-progress|done", "description": "..."}
+  Body: {"status": "todo|in-progress|review|done", "description": "..."}
+
+# WICHTIG: Erlaubte Task-Status
+Nur diese Status verwenden: todo, in-progress, review, done
+NIEMALS "backlog" oder andere Status verwenden - Tasks werden sonst nicht angezeigt!
+Neue Tasks immer mit status: "todo" erstellen.
 
 # Projekt-Pfad
 ${project.projectPath || '/root/.openclaw/workspace/kanban'}

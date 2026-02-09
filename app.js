@@ -1000,48 +1000,57 @@ app.post('/api/projects/:projectId/chat/sessions/:sessionId/messages', async (re
     
     writeChatSessions(projectId, chatData);
     
-    // Build context message for sub-agent spawn
+    // Build context for the chat agent
     const contextTaskId = taskId || session.taskId;
     const task = contextTaskId ? project.tasks?.find(t => t.id === contextTaskId) : null;
     
-    // Build comprehensive task description with workflow instructions
-    let taskDescription = `# Kanban Board Task\n\n`;
-    taskDescription += `## Projekt: ${project.name}\n`;
-    
-    if (project.docs) {
-        taskDescription += `\n### Projekt-Dokumentation\n${project.docs}\n`;
-    }
-    
+    // Build comprehensive system prompt with all context
+    let systemPrompt = `Du bist ein Entwickler-Agent für das Kanban Board. Du arbeitest nach dem Agent-Workflow.
+
+# Aktueller Kontext
+
+## Projekt: ${project.name}
+${project.docs ? `\n### Projekt-Dokumentation\n${project.docs}\n` : ''}
+`;
+
     if (task) {
-        taskDescription += `\n## Task: ${task.title}\n`;
-        taskDescription += `- **ID:** ${task.id}\n`;
-        taskDescription += `- **Status:** ${task.status}\n`;
-        taskDescription += `- **Priorität:** ${task.priority || 'medium'}\n`;
-        
-        if (task.featureFile) {
-            taskDescription += `- **Feature-Spec:** ${task.featureFile} (LIES DIESE DATEI für Details!)\n`;
-        }
-        
-        if (task.description) {
-            taskDescription += `\n### Task-Beschreibung\n${task.description}\n`;
-        }
+        systemPrompt += `
+## Aktueller Task: ${task.title}
+- **ID:** ${task.id}
+- **Status:** ${task.status}
+- **Priorität:** ${task.priority || 'medium'}
+${task.featureFile ? `- **Feature-Spec:** ${task.featureFile} (WICHTIG: Lies diese Datei für Details!)` : ''}
+
+### Task-Beschreibung
+${task.description || 'Keine Beschreibung'}
+`;
     }
+
+    systemPrompt += `
+# Workflow-Regeln
+1. Lies zuerst relevante Dateien (Feature-Spec, Code, etc.)
+2. Zeige dem User was du analysierst und findest
+3. Erkläre was du ändern wirst BEVOR du es tust
+4. Mache kleine, nachvollziehbare Änderungen
+5. Aktualisiere Task-Status via API wenn fertig
+6. Überschreibe NIEMALS die ursprünglichen Anforderungen im Task - füge Status-Updates hinzu!
+
+# API-Endpunkte
+- Task-Status updaten: PUT http://localhost:3000/api/projects/${projectId}/tasks/${contextTaskId || 'TASK_ID'}
+- Body: {"status": "in-progress|done", "description": "..."}
+
+# Projekt-Pfad
+${project.projectPath || '/root/.openclaw/workspace/kanban'}
+
+Antworte auf Deutsch. Sei präzise und zeige deinen Denkprozess.`;
+
+    // Build messages array with conversation history
+    const messages = [
+        { role: 'system', content: systemPrompt },
+        ...session.messages.map(m => ({ role: m.role, content: m.content }))
+    ];
     
-    taskDescription += `\n## Workflow-Anweisungen\n`;
-    taskDescription += `1. Lies AGENTS.md und den passenden Agent aus agents/ (z.B. agents/frontend-dev.md)\n`;
-    taskDescription += `2. Lies MEMORY.md für Kontext und frühere Entscheidungen\n`;
-    taskDescription += `3. Wenn eine Feature-Spec existiert, lies sie vollständig\n`;
-    taskDescription += `4. Befolge den Agent-Workflow strikt (Requirements → Architect → Dev → QA → DevOps)\n`;
-    taskDescription += `5. Aktualisiere den Task-Status via API wenn fertig\n`;
-    taskDescription += `6. Überschreibe NIEMALS die ursprünglichen Anforderungen im Task!\n`;
-    
-    taskDescription += `\n## User-Anfrage\n${content}\n`;
-    
-    taskDescription += `\n## API-Endpunkte\n`;
-    taskDescription += `- Task-Status updaten: PUT http://localhost:3000/api/projects/${projectId}/tasks/${contextTaskId || 'TASK_ID'}\n`;
-    taskDescription += `- Body: {"status": "in-progress|done", "description": "..."}\n`;
-    
-    // Use sessions_spawn via Tools Invoke API for background processing
+    // Stream response from Gateway
     const wantStream = req.query.stream === 'true' || req.headers.accept === 'text/event-stream';
     
     if (wantStream) {
@@ -1049,122 +1058,126 @@ app.post('/api/projects/:projectId/chat/sessions/:sessionId/messages', async (re
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
-        res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+        res.setHeader('X-Accel-Buffering', 'no');
         res.flushHeaders();
         
-        // Send initial status
-        res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: "🚀 Starte Sub-Agent für diese Aufgabe...\n\n" } }] })}\n\n`);
+        // Keepalive pings
+        const keepalive = setInterval(() => {
+            res.write(': keepalive\n\n');
+        }, 15000);
         
         try {
-            // Spawn a sub-agent session
-            const spawnResponse = await fetch(`${OPENCLAW_GATEWAY_URL}/tools/invoke`, {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 300000); // 5 min
+            
+            // Use isolated session per project-chat-session (not main session!)
+            const response = await fetch(`${OPENCLAW_GATEWAY_URL}/v1/chat/completions`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${OPENCLAW_GATEWAY_TOKEN}`
                 },
                 body: JSON.stringify({
-                    tool: 'sessions_spawn',
-                    args: {
-                        task: taskDescription,
-                        label: `kanban-${projectId}-${sessionId}`,
-                        runTimeoutSeconds: 300  // 5 min max
-                    }
-                })
+                    model: 'openclaw',
+                    stream: true,
+                    user: `kanban-${projectId}-${sessionId}`,  // Isolated session per chat
+                    messages
+                }),
+                signal: controller.signal
             });
             
-            if (!spawnResponse.ok) {
-                const errorText = await spawnResponse.text();
-                console.error('[CHAT] Spawn error:', spawnResponse.status, errorText);
-                res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: `❌ Fehler beim Starten: ${errorText}` } }] })}\n\n`);
-                res.write('data: [DONE]\n\n');
+            clearTimeout(timeout);
+            
+            if (!response.ok) {
+                clearInterval(keepalive);
+                const errorText = await response.text();
+                console.error('[CHAT] Gateway error:', response.status, errorText);
+                res.write(`data: ${JSON.stringify({ error: 'Gateway error', details: errorText })}\n\n`);
                 res.end();
                 return;
             }
             
-            const spawnResult = await spawnResponse.json();
-            console.log('[CHAT] Spawn result:', JSON.stringify(spawnResult));
+            let fullContent = '';
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
             
-            // Parse the spawn response - it's nested in result.details
-            const details = spawnResult.result?.details || {};
-            const status = details.status || 'unknown';
-            const childSession = details.childSessionKey || '';
-            const runId = details.runId || '';
-            
-            let resultContent;
-            if (status === 'accepted') {
-                resultContent = `✅ Sub-Agent gestartet!\n\n` +
-                    `**Status:** ${status}\n` +
-                    `**Run-ID:** \`${runId.slice(0, 8)}...\`\n\n` +
-                    `Der Agent arbeitet jetzt im Hintergrund an deiner Anfrage. ` +
-                    `Das Ergebnis wird hier angezeigt sobald er fertig ist.`;
-            } else {
-                resultContent = `⚠️ Spawn-Status: ${status}\n${JSON.stringify(details, null, 2)}`;
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+                
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = line.slice(6);
+                        if (data === '[DONE]') {
+                            res.write('data: [DONE]\n\n');
+                        } else {
+                            try {
+                                const parsed = JSON.parse(data);
+                                const delta = parsed.choices?.[0]?.delta?.content;
+                                if (delta) {
+                                    fullContent += delta;
+                                }
+                            } catch (e) {}
+                            res.write(line + '\n\n');
+                        }
+                    }
+                }
             }
             
-            res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: resultContent } }] })}\n\n`);
-            res.write('data: [DONE]\n\n');
-            
             // Save assistant message
-            const assistantMessage = {
-                id: uuidv4().slice(0, 8),
-                role: 'assistant',
-                content: typeof resultContent === 'string' ? resultContent : JSON.stringify(resultContent),
-                timestamp: new Date().toISOString()
-            };
-            session.messages.push(assistantMessage);
-            writeChatSessions(projectId, chatData);
+            if (fullContent) {
+                const assistantMessage = {
+                    id: uuidv4().slice(0, 8),
+                    role: 'assistant',
+                    content: fullContent,
+                    timestamp: new Date().toISOString()
+                };
+                session.messages.push(assistantMessage);
+                writeChatSessions(projectId, chatData);
+            }
             
+            clearInterval(keepalive);
             res.end();
             
         } catch (error) {
-            console.error('[CHAT] Spawn error:', error);
+            clearInterval(keepalive);
+            console.error('[CHAT] Stream error:', error);
             res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
             res.end();
         }
         
     } else {
-        // Non-streaming response - use sessions_spawn
+        // Non-streaming response
         try {
-            const spawnResponse = await fetch(`${OPENCLAW_GATEWAY_URL}/tools/invoke`, {
+            const response = await fetch(`${OPENCLAW_GATEWAY_URL}/v1/chat/completions`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${OPENCLAW_GATEWAY_TOKEN}`
                 },
                 body: JSON.stringify({
-                    tool: 'sessions_spawn',
-                    args: {
-                        task: taskDescription,
-                        label: `kanban-${projectId}-${sessionId}`,
-                        runTimeoutSeconds: 300
-                    }
+                    model: 'openclaw',
+                    stream: false,
+                    user: `kanban-${projectId}-${sessionId}`,
+                    messages
                 })
             });
             
-            if (!spawnResponse.ok) {
-                return res.status(spawnResponse.status).json({ error: 'Spawn error' });
+            if (!response.ok) {
+                return res.status(response.status).json({ error: 'Gateway error' });
             }
             
-            const spawnResult = await spawnResponse.json();
-            
-            // Parse the spawn response
-            const details = spawnResult.result?.details || {};
-            const status = details.status || 'unknown';
-            const runId = details.runId || '';
-            
-            let resultContent;
-            if (status === 'accepted') {
-                resultContent = `✅ Sub-Agent gestartet! Run-ID: ${runId.slice(0, 8)}... - Ergebnis kommt gleich.`;
-            } else {
-                resultContent = `⚠️ Spawn-Status: ${status}`;
-            }
+            const data = await response.json();
+            const assistantContent = data.choices?.[0]?.message?.content || '';
             
             // Save assistant message
             const assistantMessage = {
                 id: uuidv4().slice(0, 8),
                 role: 'assistant',
-                content: resultContent,
+                content: assistantContent,
                 timestamp: new Date().toISOString()
             };
             session.messages.push(assistantMessage);

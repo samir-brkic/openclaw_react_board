@@ -998,16 +998,20 @@ app.post('/api/projects/:projectId/chat/sessions/:sessionId/messages', async (re
     
     writeChatSessions(projectId, chatData);
     
-    // Build messages for OpenClaw
+    // Build context message for Joe (Main Session)
     const contextTaskId = taskId || session.taskId;
-    const systemContext = buildProjectContext(project, contextTaskId);
+    const task = contextTaskId ? project.tasks?.find(t => t.id === contextTaskId) : null;
     
-    const messages = [
-        { role: 'system', content: systemContext },
-        ...session.messages.map(m => ({ role: m.role, content: m.content }))
-    ];
+    // Build the message with context prefix
+    let contextPrefix = `[Kanban Board Chat - Projekt: ${project.name}`;
+    if (task) {
+        contextPrefix += ` | Task: ${task.title}`;
+    }
+    contextPrefix += ']\n\n';
     
-    // Check if streaming is requested
+    const messageWithContext = contextPrefix + content;
+    
+    // Send to Main Session (agent:main:main) with streaming
     const wantStream = req.query.stream === 'true' || req.headers.accept === 'text/event-stream';
     
     if (wantStream) {
@@ -1015,25 +1019,41 @@ app.post('/api/projects/:projectId/chat/sessions/:sessionId/messages', async (re
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
         res.flushHeaders();
         
+        // Send keepalive pings to prevent timeout
+        const keepalive = setInterval(() => {
+            res.write(': keepalive\n\n');
+        }, 15000);
+        
         try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 300000); // 5 min timeout
+            
+            // Call Main Session with session key header
             const response = await fetch(`${OPENCLAW_GATEWAY_URL}/v1/chat/completions`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${OPENCLAW_GATEWAY_TOKEN}`
+                    'Authorization': `Bearer ${OPENCLAW_GATEWAY_TOKEN}`,
+                    'x-openclaw-session-key': 'agent:main:main'  // Route to Joe's main session!
                 },
                 body: JSON.stringify({
                     model: 'openclaw',
                     stream: true,
-                    user: `kanban-${projectId}-${sessionId}`,
-                    messages
-                })
+                    messages: [{ role: 'user', content: messageWithContext }]
+                }),
+                signal: controller.signal
             });
             
+            clearTimeout(timeout);
+            
             if (!response.ok) {
-                res.write(`data: ${JSON.stringify({ error: 'Gateway error', status: response.status })}\n\n`);
+                clearInterval(keepalive);
+                const errorText = await response.text();
+                console.error('[CHAT] Gateway error:', response.status, errorText);
+                res.write(`data: ${JSON.stringify({ error: 'Gateway error', status: response.status, details: errorText })}\n\n`);
                 res.end();
                 return;
             }
@@ -1080,28 +1100,30 @@ app.post('/api/projects/:projectId/chat/sessions/:sessionId/messages', async (re
                 writeChatSessions(projectId, chatData);
             }
             
+            clearInterval(keepalive);
             res.end();
             
         } catch (error) {
+            clearInterval(keepalive);
             console.error('[CHAT] Stream error:', error);
             res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
             res.end();
         }
         
     } else {
-        // Non-streaming response
+        // Non-streaming response - also route to main session
         try {
             const response = await fetch(`${OPENCLAW_GATEWAY_URL}/v1/chat/completions`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${OPENCLAW_GATEWAY_TOKEN}`
+                    'Authorization': `Bearer ${OPENCLAW_GATEWAY_TOKEN}`,
+                    'x-openclaw-session-key': 'agent:main:main'
                 },
                 body: JSON.stringify({
                     model: 'openclaw',
                     stream: false,
-                    user: `kanban-${projectId}-${sessionId}`,
-                    messages
+                    messages: [{ role: 'user', content: messageWithContext }]
                 })
             });
             

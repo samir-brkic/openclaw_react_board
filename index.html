@@ -1125,6 +1125,48 @@
         ::-webkit-scrollbar-thumb:hover {
             background: var(--text-secondary);
         }
+
+        /* Chat Input Form Styles */
+        #chatMainArea {
+            flex: 1 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            min-width: 0 !important;
+        }
+        #chatInputForm {
+            display: none;
+            gap: 12px;
+            padding: 16px 24px;
+            background: var(--bg-secondary);
+            border-top: 1px solid var(--border);
+            align-items: flex-end;
+            width: 100%;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+        #chatInputForm.active {
+            display: flex !important;
+            width: 100% !important;
+        }
+        #chatInput {
+            flex: 1;
+            min-width: 0;
+            width: 100%;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            color: var(--text-primary);
+            font-size: 14px;
+            outline: none;
+            resize: none;
+            min-height: 44px;
+            max-height: 40vh;
+            overflow-y: auto;
+            line-height: 1.5;
+            font-family: inherit;
+            box-sizing: border-box;
+        }
     </style>
 </head>
 <body>
@@ -1355,6 +1397,27 @@
         </div>
     </div>
 
+    <!-- Session Select Modal (KB-005) -->
+    <div class="modal" id="sessionSelectModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <button class="modal-close" onclick="closeSessionSelectModal()">✕</button>
+            <div class="modal-header" id="sessionSelectTitle">💬 Chat für Task</div>
+            
+            <div style="padding: 1rem 0;">
+                <p style="color: var(--text-secondary); margin-bottom: 1rem; font-size: 0.9rem;">Bestehende Sessions:</p>
+                <div id="sessionSelectList" style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem;">
+                    <!-- Sessions werden dynamisch eingefügt -->
+                </div>
+                
+                <div style="border-top: 1px solid var(--border); margin: 1rem 0; padding-top: 1rem;">
+                    <button onclick="createNewSessionFromModal()" style="width: 100%; padding: 12px 16px; background: var(--accent); color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        ➕ Neue Session starten
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Status View (Activity Log) -->
     <div id="statusView" style="display: none; position: fixed; left: 260px; top: 0; right: 0; height: 100vh; flex-direction: column; padding: 2rem; overflow-y: auto; justify-content: flex-start; align-items: center; box-sizing: border-box;">
         <div style="margin-bottom: 2rem; width: 100%; max-width: 800px; text-align: center;">
@@ -1400,9 +1463,9 @@
 
     <!-- Chat View -->
     <div id="chatView" style="display: none; position: fixed; left: 260px; top: 0; right: 0; height: 100vh; box-sizing: border-box; background: var(--bg-primary);">
-        <div style="display: flex; height: 100%;">
+        <div style="display: flex; height: 100%; width: 100%;">
             <!-- Chat Sessions Sidebar -->
-            <div id="chatSessionsSidebar" style="width: 250px; background: var(--bg-secondary); border-right: 1px solid var(--border); display: flex; flex-direction: column;">
+            <div id="chatSessionsSidebar" style="width: 250px; flex-shrink: 0; background: var(--bg-secondary); border-right: 1px solid var(--border); display: flex; flex-direction: column;">
                 <div style="padding: 16px; border-bottom: 1px solid var(--border);">
                     <label style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px;">Projekt</label>
                     <select id="chatProjectSelect" onchange="onChatProjectChange()" style="width: 100%; margin-top: 6px; background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-primary); padding: 8px; border-radius: 4px; font-size: 13px;">
@@ -1421,7 +1484,7 @@
             </div>
             
             <!-- Chat Main Area -->
-            <div style="flex: 1; display: flex; flex-direction: column;">
+            <div id="chatMainArea" style="flex: 1; display: flex; flex-direction: column; min-width: 0; width: 100%;">
                 <div id="chatHeader" style="padding: 16px 24px; border-bottom: 1px solid var(--border); background: var(--bg-secondary);">
                     <h2 style="margin: 0; color: var(--text-primary); font-size: 18px;">
                         <span id="chatProjectName">Projekt Chat</span>
@@ -1431,8 +1494,8 @@
                 
                 <div id="chatMessages" style="flex: 1; overflow-y: auto; padding: 24px;"></div>
                 
-                <form id="chatInputForm" onsubmit="sendChatMessage(event)" style="display: none; gap: 12px; padding: 16px 24px; background: var(--bg-secondary); border-top: 1px solid var(--border); align-items: flex-end;">
-                    <textarea id="chatInput" rows="1" placeholder="Nachricht eingeben... (Shift+Enter für neue Zeile)" style="flex: 1; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; color: var(--text-primary); font-size: 14px; outline: none; resize: none; min-height: 44px; max-height: 40vh; overflow-y: auto; line-height: 1.5; font-family: inherit; box-sizing: border-box;"></textarea>
+                <form id="chatInputForm" onsubmit="sendChatMessage(event)">
+                    <textarea id="chatInput" rows="1" placeholder="Nachricht eingeben... (Shift+Enter für neue Zeile)"></textarea>
                     <button type="submit" id="chatSendBtn" style="background: var(--accent); color: white; border: none; width: 44px; height: 44px; min-height: 44px; border-radius: 8px; cursor: pointer; font-size: 18px; flex-shrink: 0;">↑</button>
                 </form>
             </div>
@@ -2660,27 +2723,97 @@
             
             if (!task) return;
             
-            // Speichere Task-Kontext
+            // Speichere Task-Kontext für später
             currentTaskContext = {
                 taskId: currentTaskId,
                 taskTitle: task.title
             };
             chatProjectId = activeProjectId;
             
-            // Schließe Modal und wechsle zum Chat
+            // Prüfe ob Sessions für diesen Task existieren
+            try {
+                const res = await fetch(`/api/projects/${activeProjectId}/chat/sessions`);
+                const sessions = await res.json();
+                const taskSessions = sessions.filter(s => s.taskId === currentTaskId);
+                
+                console.log('[DEBUG] Found sessions for task:', taskSessions.length);
+                
+                if (taskSessions.length > 0) {
+                    // Sessions existieren → Auswahl-Dialog zeigen
+                    showSessionSelectModal(task, taskSessions);
+                } else {
+                    // Keine Sessions → direkt neue erstellen
+                    proceedToChat(task);
+                }
+            } catch (e) {
+                console.error('Error loading sessions:', e);
+                // Bei Fehler: direkt neue Session
+                proceedToChat(task);
+            }
+        }
+        
+        // Zeigt den Session-Auswahl Dialog
+        function showSessionSelectModal(task, sessions) {
+            document.getElementById('sessionSelectTitle').textContent = `💬 Chat für: ${task.title.slice(0, 40)}${task.title.length > 40 ? '...' : ''}`;
+            
+            const listEl = document.getElementById('sessionSelectList');
+            listEl.innerHTML = sessions.map(s => {
+                const date = new Date(s.createdAt || s.lastMessageAt).toLocaleDateString('de-DE');
+                const msgCount = s.messageCount || s.messages?.length || 0;
+                return `
+                    <div onclick="selectExistingSession('${s.id}')" 
+                         style="padding: 12px 16px; background: var(--bg-tertiary); border: 1px solid var(--border); 
+                                border-radius: 8px; cursor: pointer; transition: all 0.2s;"
+                         onmouseover="this.style.borderColor='var(--accent)'" 
+                         onmouseout="this.style.borderColor='var(--border)'">
+                        <div style="font-weight: 500; color: var(--text-primary); margin-bottom: 4px;">
+                            📝 ${s.title || 'Unbenannte Session'}
+                        </div>
+                        <div style="font-size: 0.8rem; color: var(--text-secondary);">
+                            ${date} • ${msgCount} Nachrichten
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            document.getElementById('sessionSelectModal').classList.add('active');
+        }
+        
+        function closeSessionSelectModal() {
+            document.getElementById('sessionSelectModal').classList.remove('active');
+        }
+        
+        // Bestehende Session auswählen
+        async function selectExistingSession(sessionId) {
+            closeSessionSelectModal();
             closeTaskModal();
             switchTab('chat');
             
-            // Warte kurz bis Chat initialisiert
             await new Promise(r => setTimeout(r, 100));
-            
-            // Setze Projekt im Dropdown
             document.getElementById('chatProjectSelect').value = chatProjectId;
             
-            console.log('[DEBUG] Creating session with taskId:', currentTaskId);
+            // Lade die ausgewählte Session
+            await loadChatSessions();
+            await loadChatSession(sessionId);
+        }
+        
+        // Neue Session aus Modal erstellen
+        async function createNewSessionFromModal() {
+            const task = currentTaskContext;
+            closeSessionSelectModal();
+            proceedToChat({ title: task.taskTitle, id: task.taskId });
+        }
+        
+        // Gemeinsame Logik: zum Chat wechseln und neue Session erstellen
+        async function proceedToChat(task) {
+            closeTaskModal();
+            switchTab('chat');
             
-            // Erstelle neue Session mit Task-Kontext
-            await createChatSession(`Task: ${task.title.slice(0, 40)}`, currentTaskId);
+            await new Promise(r => setTimeout(r, 100));
+            document.getElementById('chatProjectSelect').value = chatProjectId;
+            
+            console.log('[DEBUG] Creating session with taskId:', currentTaskContext.taskId);
+            await createChatSession(`Task: ${task.title.slice(0, 40)}`, currentTaskContext.taskId);
         }
         
         // currentTaskId wird oben bei den Task-Variablen definiert
@@ -2746,7 +2879,7 @@
                 renderChatMessages();
                 renderChatSessions();
                 document.getElementById('chatSessionName').textContent = ' / ' + activeChatSession.title;
-                document.getElementById('chatInputForm').style.display = 'flex';
+                document.getElementById('chatInputForm').classList.add('active');
                 document.getElementById('chatInput').focus();
             } catch (e) {
                 console.error('Error loading session:', e);
@@ -2765,7 +2898,7 @@
                     </button>
                 </div>
             `;
-            document.getElementById('chatInputForm').style.display = 'none';
+            document.getElementById('chatInputForm').classList.remove('active');
         }
         
         async function createChatSession(title = 'Neue Session', taskId = null) {

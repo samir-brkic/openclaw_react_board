@@ -129,6 +129,16 @@
           "date": "9.2.2026",
           "featureFile": "features/KB-004-chat-input-improvements.md",
           "createdAt": "2026-02-09T11:57:13.824Z"
+        },
+        {
+          "id": "891d0289",
+          "title": "KB-005: Chat-Session Auswahl bei Task-Öffnung",
+          "description": "Wenn im Task \"Im Chat öffnen\" geklickt wird und bereits Sessions für diesen Task existieren, soll ein Dialog erscheinen mit Auswahl: bestehende Session fortsetzen oder neue starten.",
+          "status": "in-progress",
+          "priority": "medium",
+          "date": "9.2.2026",
+          "featureFile": "features/KB-005-chat-session-selection.md",
+          "createdAt": "2026-02-09T14:00:31.086Z"
         }
       ],
       "createdAt": "2026-02-08T22:21:38.402Z",

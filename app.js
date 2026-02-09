@@ -1240,7 +1240,48 @@ app.get('/api/chat/status', async (req, res) => {
     }
 });
 
+// Cleanup stuck messages on startup
+function cleanupStuckMessages() {
+    const sessionsDir = path.join(__dirname, 'data', 'chat-sessions');
+    if (!fs.existsSync(sessionsDir)) return;
+    
+    const files = fs.readdirSync(sessionsDir).filter(f => f.endsWith('.json'));
+    let cleaned = 0;
+    
+    for (const file of files) {
+        try {
+            const filePath = path.join(sessionsDir, file);
+            const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            let changed = false;
+            
+            for (const session of data.sessions) {
+                for (const msg of session.messages) {
+                    if (msg.role === 'assistant' && (msg.status === 'streaming' || msg.status === 'pending')) {
+                        msg.status = 'error';
+                        msg.content = msg.content || '⚠️ Server wurde neu gestartet - bitte erneut senden';
+                        msg.updatedAt = new Date().toISOString();
+                        changed = true;
+                        cleaned++;
+                    }
+                }
+            }
+            
+            if (changed) {
+                fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+            }
+        } catch (e) {
+            console.error('[CHAT] Cleanup error for', file, e.message);
+        }
+    }
+    
+    if (cleaned > 0) {
+        console.log(`[CHAT] Cleaned up ${cleaned} stuck messages from previous run`);
+    }
+}
+
 // Start server
+cleanupStuckMessages();
+
 app.listen(PORT, HOST, () => {
     console.log(`\n🦞 OpenClaw Board v2\n`);
     console.log(`   🌐 http://0.0.0.0:${PORT}`);

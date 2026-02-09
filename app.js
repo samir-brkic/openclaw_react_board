@@ -1016,7 +1016,7 @@ app.delete('/api/projects/:projectId/chat/sessions/:sessionId', (req, res) => {
     res.json({ success: true });
 });
 
-// POST send message and stream response
+// POST send message - starts background processing, returns immediately
 app.post('/api/projects/:projectId/chat/sessions/:sessionId/messages', async (req, res) => {
     const { projectId, sessionId } = req.params;
     const { content, taskId } = req.body;
@@ -1033,7 +1033,7 @@ app.post('/api/projects/:projectId/chat/sessions/:sessionId/messages', async (re
     }
     
     // Get session
-    const chatData = readChatSessions(projectId);
+    let chatData = readChatSessions(projectId);
     const session = chatData.sessions.find(s => s.id === sessionId);
     if (!session) {
         return res.status(404).json({ error: 'Session not found' });
@@ -1053,9 +1053,27 @@ app.post('/api/projects/:projectId/chat/sessions/:sessionId/messages', async (re
         session.title = content.slice(0, 50) + (content.length > 50 ? '...' : '');
     }
     
+    // Add pending assistant message (will be updated as response streams in)
+    const assistantMessageId = uuidv4().slice(0, 8);
+    const assistantMessage = {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: '',
+        status: 'pending',  // pending | streaming | complete | error
+        timestamp: new Date().toISOString()
+    };
+    session.messages.push(assistantMessage);
+    
     writeChatSessions(projectId, chatData);
     
-    // Build context for the chat agent
+    // Return immediately - processing happens in background
+    res.json({ 
+        status: 'processing',
+        userMessage,
+        assistantMessageId
+    });
+    
+    // Build context for the chat agent (in background)
     const contextTaskId = taskId || session.taskId;
     const task = contextTaskId ? project.tasks?.find(t => t.id === contextTaskId) : null;
     
@@ -1111,179 +1129,111 @@ ${project.projectPath || '/root/.openclaw/workspace/kanban'}
 
 Antworte auf Deutsch. Sei präzise und zeige deinen Denkprozess.`;
 
-    // Build messages array with conversation history
-    const messages = [
+    // Build messages array with conversation history (exclude the empty pending message)
+    const messagesForApi = [
         { role: 'system', content: systemPrompt },
-        ...session.messages.map(m => ({ role: m.role, content: m.content }))
+        ...session.messages.filter(m => m.status !== 'pending').map(m => ({ role: m.role, content: m.content }))
     ];
     
-    console.log('[CHAT] Sending to Gateway, messages:', messages.length, 'user:', `kanban-${projectId}-${sessionId}`);
+    console.log('[CHAT] Starting background processing for session', sessionId);
     
-    // Stream response from Gateway
-    const wantStream = req.query.stream === 'true' || req.headers.accept === 'text/event-stream';
-    
-    if (wantStream) {
-        // SSE Streaming response
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
-        res.setHeader('X-Accel-Buffering', 'no');
-        res.flushHeaders();
+    // Process in background (don't await)
+    processMessageInBackground(projectId, sessionId, assistantMessageId, messagesForApi);
+});
+
+// Background message processing function
+async function processMessageInBackground(projectId, sessionId, messageId, messages) {
+    try {
+        console.log('[CHAT] Background: Calling Gateway...');
         
-        console.log('[CHAT] Starting SSE stream...');
+        const response = await fetch(`${OPENCLAW_GATEWAY_URL}/v1/chat/completions`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${OPENCLAW_GATEWAY_TOKEN}`
+            },
+            body: JSON.stringify({
+                model: 'openclaw',
+                stream: true,
+                user: `kanban-${projectId}-${sessionId}`,
+                messages
+            })
+        });
         
-        // Keepalive pings - every 5 seconds to prevent browser timeout
-        const keepalive = setInterval(() => {
-            res.write(': keepalive\n\n');
-        }, 5000);
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('[CHAT] Background: Gateway error:', response.status, errorText);
+            updateMessageStatus(projectId, sessionId, messageId, 'error', `Fehler: ${errorText}`);
+            return;
+        }
         
-        try {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 300000); // 5 min
+        console.log('[CHAT] Background: Reading stream...');
+        
+        let fullContent = '';
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let chunkCount = 0;
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
             
-            console.log('[CHAT] Calling Gateway...');
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
             
-            // Use isolated session per project-chat-session (not main session!)
-            const response = await fetch(`${OPENCLAW_GATEWAY_URL}/v1/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${OPENCLAW_GATEWAY_TOKEN}`
-                },
-                body: JSON.stringify({
-                    model: 'openclaw',
-                    stream: true,
-                    user: `kanban-${projectId}-${sessionId}`,  // Isolated session per chat
-                    messages
-                }),
-                signal: controller.signal
-            });
-            
-            clearTimeout(timeout);
-            
-            console.log('[CHAT] Gateway response status:', response.status);
-            
-            if (!response.ok) {
-                clearInterval(keepalive);
-                const errorText = await response.text();
-                console.error('[CHAT] Gateway error:', response.status, errorText);
-                res.write(`data: ${JSON.stringify({ error: 'Gateway error', details: errorText })}\n\n`);
-                res.end();
-                return;
-            }
-            
-            console.log('[CHAT] Starting to read stream...');
-            
-            let fullContent = '';
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let lastActivity = Date.now();
-            
-            // Check for stalled connection
-            const stallCheck = setInterval(() => {
-                if (Date.now() - lastActivity > 60000) {
-                    console.log('[CHAT] Connection stalled, closing');
-                    clearInterval(stallCheck);
-                    reader.cancel();
-                }
-            }, 5000);
-            
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                
-                lastActivity = Date.now();
-                const chunk = decoder.decode(value);
-                const lines = chunk.split('\n');
-                
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const data = line.slice(6);
-                        if (data === '[DONE]') {
-                            res.write('data: [DONE]\n\n');
-                        } else {
-                            try {
-                                const parsed = JSON.parse(data);
-                                const delta = parsed.choices?.[0]?.delta?.content;
-                                if (delta) {
-                                    fullContent += delta;
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const data = line.slice(6);
+                    if (data === '[DONE]') {
+                        // Streaming complete
+                    } else {
+                        try {
+                            const parsed = JSON.parse(data);
+                            const delta = parsed.choices?.[0]?.delta?.content;
+                            if (delta) {
+                                fullContent += delta;
+                                chunkCount++;
+                                
+                                // Update message every 5 chunks (reduce disk writes)
+                                if (chunkCount % 5 === 0) {
+                                    updateMessageStatus(projectId, sessionId, messageId, 'streaming', fullContent);
                                 }
-                            } catch (e) {}
-                            res.write(line + '\n\n');
-                        }
+                            }
+                        } catch (e) {}
                     }
                 }
             }
-            
-            clearInterval(stallCheck);
-            
-            // Save assistant message
-            if (fullContent) {
-                const assistantMessage = {
-                    id: uuidv4().slice(0, 8),
-                    role: 'assistant',
-                    content: fullContent,
-                    timestamp: new Date().toISOString()
-                };
-                session.messages.push(assistantMessage);
-                writeChatSessions(projectId, chatData);
-            }
-            
-            clearInterval(keepalive);
-            res.end();
-            
-        } catch (error) {
-            clearInterval(keepalive);
-            console.error('[CHAT] Stream error:', error);
-            res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
-            res.end();
         }
         
-    } else {
-        // Non-streaming response
-        try {
-            const response = await fetch(`${OPENCLAW_GATEWAY_URL}/v1/chat/completions`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${OPENCLAW_GATEWAY_TOKEN}`
-                },
-                body: JSON.stringify({
-                    model: 'openclaw',
-                    stream: false,
-                    user: `kanban-${projectId}-${sessionId}`,
-                    messages
-                })
-            });
-            
-            if (!response.ok) {
-                return res.status(response.status).json({ error: 'Gateway error' });
-            }
-            
-            const data = await response.json();
-            const assistantContent = data.choices?.[0]?.message?.content || '';
-            
-            // Save assistant message
-            const assistantMessage = {
-                id: uuidv4().slice(0, 8),
-                role: 'assistant',
-                content: assistantContent,
-                timestamp: new Date().toISOString()
-            };
-            session.messages.push(assistantMessage);
-            writeChatSessions(projectId, chatData);
-            
-            res.json({
-                userMessage,
-                assistantMessage
-            });
-            
-        } catch (error) {
-            console.error('[CHAT] Error:', error);
-            res.status(500).json({ error: error.message });
-        }
+        // Final update with complete status
+        console.log('[CHAT] Background: Complete, content length:', fullContent.length);
+        updateMessageStatus(projectId, sessionId, messageId, 'complete', fullContent);
+        
+    } catch (error) {
+        console.error('[CHAT] Background: Error:', error);
+        updateMessageStatus(projectId, sessionId, messageId, 'error', `Fehler: ${error.message}`);
     }
-});
+}
+
+// Helper to update message status in session file
+function updateMessageStatus(projectId, sessionId, messageId, status, content) {
+    try {
+        const chatData = readChatSessions(projectId);
+        const session = chatData.sessions.find(s => s.id === sessionId);
+        if (!session) return;
+        
+        const message = session.messages.find(m => m.id === messageId);
+        if (!message) return;
+        
+        message.status = status;
+        message.content = content;
+        message.updatedAt = new Date().toISOString();
+        
+        writeChatSessions(projectId, chatData);
+    } catch (e) {
+        console.error('[CHAT] Error updating message status:', e);
+    }
+}
 
 // GET gateway status (for UI)
 app.get('/api/chat/status', async (req, res) => {

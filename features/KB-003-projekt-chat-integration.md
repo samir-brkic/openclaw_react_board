@@ -109,16 +109,170 @@ Der Agent arbeitet im Projekt-Modus mit vollem Kontext und nutzt den Agent-Workf
 - Keine Feature-Abhängigkeiten (kann unabhängig entwickelt werden)
 - Benötigt: OpenClaw Gateway API-Zugang
 
-## Offene Fragen
+## Offene Fragen ✅ GEKLÄRT
 
-1. **Gateway-Endpoint:** Welcher OpenClaw-Endpoint nimmt Chat-Messages entgegen?
-2. **Auth:** Brauchen wir einen API-Key für Gateway-Zugriff?
-3. **Streaming:** Unterstützt das Gateway SSE/WebSocket für Streaming-Antworten?
+1. **Gateway-Endpoint:** `POST /v1/chat/completions` (OpenAI-kompatibel) ✅
+2. **Auth:** Bearer Token (Gateway-Token aus Config) ✅
+3. **Streaming:** SSE mit `stream: true` ✅ getestet und funktioniert
+
+---
+
+## Tech-Design (Solution Architect)
+
+### OpenClaw Gateway Integration
+
+**Endpoint:** `POST http://127.0.0.1:18789/v1/chat/completions`
+**Auth:** `Authorization: Bearer <OPENCLAW_GATEWAY_TOKEN>`
+**Format:** OpenAI Chat Completions API
+
+```
+Request:
+{
+  "model": "openclaw",
+  "stream": true,
+  "user": "kanban-{projectId}-{sessionId}",  // Session-Persistenz
+  "messages": [
+    {"role": "system", "content": "<Projekt-Kontext>"},
+    {"role": "user", "content": "User-Nachricht"},
+    ...
+  ]
+}
+
+Response (Streaming SSE):
+data: {"choices":[{"delta":{"content":"Token..."}}]}
+data: {"choices":[{"delta":{"content":"..."}}]}
+data: [DONE]
+```
+
+### Component-Struktur
+
+```
+App.jsx
+├── Sidebar (existiert)
+│   └── + "Chat" Navigation-Link
+├── Routes
+│   ├── Dashboard (existiert)
+│   ├── Projects (existiert)
+│   ├── Activities (existiert)
+│   ├── ContextFiles (existiert)
+│   └── + Chat (NEU)
+│       └── ChatPage.jsx
+│           ├── SessionSidebar
+│           │   ├── SessionList
+│           │   └── NewSessionButton
+│           └── ChatView
+│               ├── MessageList
+│               │   └── Message (mit Markdown)
+│               ├── TypingIndicator
+│               └── MessageInput
+
+KanbanBoard.jsx (existiert)
+└── TaskDetail
+    └── + "Im Chat öffnen" Button
+```
+
+### Daten-Model
+
+**Session:**
+```
+Jede Chat-Session hat:
+- ID (uuid)
+- Projekt-ID (Zuordnung)
+- Titel (automatisch aus erster Nachricht oder "Neue Session")
+- Erstellt am (Timestamp)
+- Messages (Array)
+
+Gespeichert in: data/chat-sessions/{projectId}.json
+```
+
+**Message:**
+```
+Jede Nachricht hat:
+- ID (uuid)
+- Rolle (user/assistant/system)
+- Inhalt (Text, Markdown)
+- Timestamp
+- Status (sending/sent/error)
+- Task-Kontext (optional, wenn aus Task geöffnet)
+```
+
+**Kontext-Injection (System-Message):**
+```
+Du arbeitest im Projekt "{projektName}".
+
+## Projekt-Beschreibung
+{projektDocs}
+
+## Tasks Übersicht
+- KB-001 ✅ Mobile Responsive (done)
+- KB-002 🔵 Feature-Spec Link (todo)
+- KB-003 🟡 Chat Integration (in-progress)
+
+## Aktueller Task-Fokus (falls vorhanden)
+{taskDetails}
+
+Nutze den Agent-Workflow (Requirements → Architect → Dev → QA → DevOps).
+```
+
+### Tech-Entscheidungen
+
+| Entscheidung | Begründung |
+|--------------|------------|
+| SSE Streaming | Echtzeit-Antworten, bessere UX als Polling |
+| OpenAI-kompatible API | Standard-Format, einfache Integration |
+| Session per `user` Feld | Gateway-native Session-Persistenz |
+| JSON-Dateispeicher | Konsistent mit bestehender Tasks-Speicherung |
+| react-markdown | Leichtgewichtig, gute Code-Block-Unterstützung |
+
+### Dependencies (zu installieren)
+
+```
+- react-markdown (Markdown-Rendering)
+- remark-gfm (GitHub Flavored Markdown)
+- react-syntax-highlighter (Code-Highlighting)
+- uuid (bereits vorhanden)
+```
+
+### API-Erweiterung (Backend)
+
+```
+Neue Endpoints in app.js:
+
+GET  /api/projects/:id/chat/sessions
+POST /api/projects/:id/chat/sessions
+GET  /api/projects/:id/chat/sessions/:sessionId
+POST /api/projects/:id/chat/sessions/:sessionId/messages
+DELETE /api/projects/:id/chat/sessions/:sessionId
+
+POST /api/chat/send (Proxy zu OpenClaw Gateway)
+- Nimmt Message + Kontext
+- Streamt SSE-Response durch
+- Speichert in Session
+```
+
+### Umgebungsvariablen
+
+```
+OPENCLAW_GATEWAY_URL=http://127.0.0.1:18789
+OPENCLAW_GATEWAY_TOKEN=<token>
+```
+
+### Implementierungs-Reihenfolge
+
+1. **Backend:** Chat-Session API + Gateway-Proxy
+2. **Frontend:** ChatPage Grundgerüst + Routing
+3. **Frontend:** MessageList + MessageInput
+4. **Frontend:** Streaming-Integration
+5. **Frontend:** Session-Management (Sidebar, New/Delete)
+6. **Frontend:** Markdown-Rendering
+7. **Integration:** "Im Chat öffnen" Button im TaskDetail
+8. **Polish:** Loading-States, Error-Handling, Auto-Scroll
 
 ## Nächster Schritt
 
-→ Solution Architect: Tech-Design erstellen, Gateway-Integration klären
+→ Frontend Developer: Implementierung starten
 
 ---
 
 *Erstellt: 2026-02-09 | Agent: Requirements Engineer*
+*Tech-Design: 2026-02-09 | Agent: Solution Architect*

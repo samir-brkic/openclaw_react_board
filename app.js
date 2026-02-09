@@ -820,9 +820,346 @@ app.put('/api/projects/:id/files/*', (req, res) => {
     }
 });
 
+// ============================================
+// CHAT API - OpenClaw Integration
+// ============================================
+
+const OPENCLAW_GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL || 'http://127.0.0.1:18789';
+const OPENCLAW_GATEWAY_TOKEN = process.env.OPENCLAW_GATEWAY_TOKEN || '';
+
+const chatSessionsDir = path.join(__dirname, 'data', 'chat-sessions');
+
+// Ensure chat sessions directory exists
+if (!fs.existsSync(chatSessionsDir)) {
+    fs.mkdirSync(chatSessionsDir, { recursive: true });
+}
+
+function getChatSessionsFile(projectId) {
+    return path.join(chatSessionsDir, `${projectId}.json`);
+}
+
+function readChatSessions(projectId) {
+    const file = getChatSessionsFile(projectId);
+    try {
+        if (fs.existsSync(file)) {
+            return JSON.parse(fs.readFileSync(file, 'utf8'));
+        }
+    } catch (error) {
+        console.error(`Error reading chat sessions for ${projectId}:`, error);
+    }
+    return { sessions: [] };
+}
+
+function writeChatSessions(projectId, data) {
+    const file = getChatSessionsFile(projectId);
+    fs.writeFileSync(file, JSON.stringify(data, null, 2), 'utf8');
+}
+
+// Build context for OpenClaw
+function buildProjectContext(project, taskId = null) {
+    let context = `Du arbeitest im Projekt "${project.name}".\n\n`;
+    
+    if (project.docs) {
+        context += `## Projekt-Dokumentation\n${project.docs}\n\n`;
+    }
+    
+    context += `## Tasks Übersicht\n`;
+    const statusEmoji = { 'done': '✅', 'in-progress': '🟡', 'todo': '🔵' };
+    
+    for (const task of project.tasks || []) {
+        const emoji = statusEmoji[task.status] || '⚪';
+        context += `- ${task.id} ${emoji} ${task.title} (${task.status})\n`;
+    }
+    
+    if (taskId) {
+        const task = project.tasks?.find(t => t.id === taskId);
+        if (task) {
+            context += `\n## Aktueller Task-Fokus: ${task.id}\n`;
+            context += `**Titel:** ${task.title}\n`;
+            context += `**Status:** ${task.status}\n`;
+            context += `**Priorität:** ${task.priority || 'medium'}\n`;
+            if (task.description) {
+                context += `**Beschreibung:**\n${task.description}\n`;
+            }
+        }
+    }
+    
+    context += `\nNutze den Agent-Workflow (Requirements → Architect → Dev → QA → DevOps) für strukturierte Arbeit.`;
+    
+    return context;
+}
+
+// GET chat sessions for a project
+app.get('/api/projects/:projectId/chat/sessions', (req, res) => {
+    const { projectId } = req.params;
+    const data = readChatSessions(projectId);
+    
+    // Return sessions without full message history (for list view)
+    const sessions = data.sessions.map(s => ({
+        id: s.id,
+        title: s.title,
+        createdAt: s.createdAt,
+        messageCount: s.messages?.length || 0,
+        lastMessageAt: s.messages?.length > 0 ? s.messages[s.messages.length - 1].timestamp : null
+    }));
+    
+    res.json({ sessions });
+});
+
+// POST create new chat session
+app.post('/api/projects/:projectId/chat/sessions', (req, res) => {
+    const { projectId } = req.params;
+    const { title, taskId } = req.body;
+    
+    const data = readChatSessions(projectId);
+    
+    const newSession = {
+        id: uuidv4().slice(0, 8),
+        title: title || 'Neue Session',
+        taskId: taskId || null,
+        createdAt: new Date().toISOString(),
+        messages: []
+    };
+    
+    data.sessions.unshift(newSession); // Add to beginning
+    writeChatSessions(projectId, data);
+    
+    console.log(`[CHAT] New session "${newSession.title}" for project ${projectId}`);
+    res.status(201).json(newSession);
+});
+
+// GET single chat session with messages
+app.get('/api/projects/:projectId/chat/sessions/:sessionId', (req, res) => {
+    const { projectId, sessionId } = req.params;
+    const data = readChatSessions(projectId);
+    
+    const session = data.sessions.find(s => s.id === sessionId);
+    if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    res.json(session);
+});
+
+// DELETE chat session
+app.delete('/api/projects/:projectId/chat/sessions/:sessionId', (req, res) => {
+    const { projectId, sessionId } = req.params;
+    const data = readChatSessions(projectId);
+    
+    const index = data.sessions.findIndex(s => s.id === sessionId);
+    if (index === -1) {
+        return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    data.sessions.splice(index, 1);
+    writeChatSessions(projectId, data);
+    
+    console.log(`[CHAT] Deleted session ${sessionId} from project ${projectId}`);
+    res.json({ success: true });
+});
+
+// POST send message and stream response
+app.post('/api/projects/:projectId/chat/sessions/:sessionId/messages', async (req, res) => {
+    const { projectId, sessionId } = req.params;
+    const { content, taskId } = req.body;
+    
+    if (!content) {
+        return res.status(400).json({ error: 'Message content required' });
+    }
+    
+    // Get project for context
+    const projectData = readData();
+    const project = projectData.projects.find(p => p.id === projectId);
+    if (!project) {
+        return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Get session
+    const chatData = readChatSessions(projectId);
+    const session = chatData.sessions.find(s => s.id === sessionId);
+    if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    // Add user message
+    const userMessage = {
+        id: uuidv4().slice(0, 8),
+        role: 'user',
+        content,
+        timestamp: new Date().toISOString()
+    };
+    session.messages.push(userMessage);
+    
+    // Update session title from first message
+    if (session.messages.length === 1) {
+        session.title = content.slice(0, 50) + (content.length > 50 ? '...' : '');
+    }
+    
+    writeChatSessions(projectId, chatData);
+    
+    // Build messages for OpenClaw
+    const contextTaskId = taskId || session.taskId;
+    const systemContext = buildProjectContext(project, contextTaskId);
+    
+    const messages = [
+        { role: 'system', content: systemContext },
+        ...session.messages.map(m => ({ role: m.role, content: m.content }))
+    ];
+    
+    // Check if streaming is requested
+    const wantStream = req.query.stream === 'true' || req.headers.accept === 'text/event-stream';
+    
+    if (wantStream) {
+        // SSE Streaming response
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.flushHeaders();
+        
+        try {
+            const response = await fetch(`${OPENCLAW_GATEWAY_URL}/v1/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${OPENCLAW_GATEWAY_TOKEN}`
+                },
+                body: JSON.stringify({
+                    model: 'openclaw',
+                    stream: true,
+                    user: `kanban-${projectId}-${sessionId}`,
+                    messages
+                })
+            });
+            
+            if (!response.ok) {
+                res.write(`data: ${JSON.stringify({ error: 'Gateway error', status: response.status })}\n\n`);
+                res.end();
+                return;
+            }
+            
+            let fullContent = '';
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                const chunk = decoder.decode(value);
+                const lines = chunk.split('\n');
+                
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = line.slice(6);
+                        if (data === '[DONE]') {
+                            res.write('data: [DONE]\n\n');
+                        } else {
+                            try {
+                                const parsed = JSON.parse(data);
+                                const delta = parsed.choices?.[0]?.delta?.content;
+                                if (delta) {
+                                    fullContent += delta;
+                                }
+                            } catch (e) {}
+                            res.write(line + '\n\n');
+                        }
+                    }
+                }
+            }
+            
+            // Save assistant message
+            if (fullContent) {
+                const assistantMessage = {
+                    id: uuidv4().slice(0, 8),
+                    role: 'assistant',
+                    content: fullContent,
+                    timestamp: new Date().toISOString()
+                };
+                session.messages.push(assistantMessage);
+                writeChatSessions(projectId, chatData);
+            }
+            
+            res.end();
+            
+        } catch (error) {
+            console.error('[CHAT] Stream error:', error);
+            res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+            res.end();
+        }
+        
+    } else {
+        // Non-streaming response
+        try {
+            const response = await fetch(`${OPENCLAW_GATEWAY_URL}/v1/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${OPENCLAW_GATEWAY_TOKEN}`
+                },
+                body: JSON.stringify({
+                    model: 'openclaw',
+                    stream: false,
+                    user: `kanban-${projectId}-${sessionId}`,
+                    messages
+                })
+            });
+            
+            if (!response.ok) {
+                return res.status(response.status).json({ error: 'Gateway error' });
+            }
+            
+            const data = await response.json();
+            const assistantContent = data.choices?.[0]?.message?.content || '';
+            
+            // Save assistant message
+            const assistantMessage = {
+                id: uuidv4().slice(0, 8),
+                role: 'assistant',
+                content: assistantContent,
+                timestamp: new Date().toISOString()
+            };
+            session.messages.push(assistantMessage);
+            writeChatSessions(projectId, chatData);
+            
+            res.json({
+                userMessage,
+                assistantMessage
+            });
+            
+        } catch (error) {
+            console.error('[CHAT] Error:', error);
+            res.status(500).json({ error: error.message });
+        }
+    }
+});
+
+// GET gateway status (for UI)
+app.get('/api/chat/status', async (req, res) => {
+    try {
+        const response = await fetch(`${OPENCLAW_GATEWAY_URL}/health`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${OPENCLAW_GATEWAY_TOKEN}`
+            },
+            timeout: 5000
+        });
+        
+        res.json({
+            online: response.ok,
+            url: OPENCLAW_GATEWAY_URL
+        });
+    } catch (error) {
+        res.json({
+            online: false,
+            error: error.message
+        });
+    }
+});
+
 // Start server
 app.listen(PORT, HOST, () => {
     console.log(`\n🦞 OpenClaw Board v2\n`);
     console.log(`   🌐 http://0.0.0.0:${PORT}`);
-    console.log(`   📡 API: http://localhost:${PORT}/api/projects\n`);
+    console.log(`   📡 API: http://localhost:${PORT}/api/projects`);
+    console.log(`   💬 Chat: OpenClaw Gateway at ${OPENCLAW_GATEWAY_URL}\n`);
 });

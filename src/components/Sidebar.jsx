@@ -85,6 +85,14 @@ function Sidebar({ projects, activeProjectId, setActiveProjectId }) {
           <span className="nav-label">Aktivitäten</span>
         </Link>
         
+        <Link 
+          to={activeProjectId ? `/chat/${activeProjectId}` : '/chat'} 
+          className={`nav-item ${isActiveTab('/chat') ? 'active' : ''}`}
+        >
+          <span className="nav-icon">💬</span>
+          <span className="nav-label">Chat</span>
+        </Link>
+        
         <Link to="/context" className={`nav-item ${isActiveTab('/context') ? 'active' : ''}`}>
           <span className="nav-icon">🧠</span>
           <span className="nav-label">Context-Speicher</span>

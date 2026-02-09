@@ -19,6 +19,108 @@
         }
       ],
       "createdAt": "2026-02-07T16:00:00.000Z"
+    },
+    {
+      "id": "proj-8439559e",
+      "name": "Lernity.de",
+      "description": "Vokabel-Lernapp mit React Frontend und Node.js Backend. Features: Karteikarten, Spaced Repetition, OCR-Import, PDF-Export, E-Mail Reminders.",
+      "docs": "# Lernity.de - Projekt-Kontext\n\n## Was ist Lernity?\n\n**Lernity** ist eine Vokabel-Lernapp mit folgenden Features:\n- 📚 Karteikarten-System\n- 🔄 Spaced Repetition (intelligente Wiederholung)\n- 📸 OCR-Import (Vokabeln von Bildern einlesen)\n- 📄 PDF-Export\n- 📧 E-Mail Reminders\n\n## Tech-Stack\n\n### Frontend\n- **Framework:** React (Create React App)\n- **Styling:** CSS/SCSS\n- **HTTP Client:** Axios\n- **Routing:** React Router\n\n### Backend\n- **Framework:** Node.js + Express\n- **Database:** PostgreSQL\n- **Auth:** JWT\n- **Process Manager:** pm2\n\n### Infrastruktur\n| Umgebung | Frontend | Backend | Server |\n|----------|----------|---------|--------|\n| **Production** | lernity.de | api.lernity.de | 192.168.200.34 |\n| **Test** | test.lernity.de | test.api.lernity.de | 192.168.200.29 |\n| **Lokal** | localhost:3000 | localhost:3001 | - |\n\n### Nginx Proxy\n- **Server:** 192.168.200.40\n- Routet externe Requests zu internen Servern\n\n## Projekt-Struktur\n\n```\n/opt/vocab-app/              (auf Prod-Server)\n├── frontend/\n│   ├── src/\n│   │   ├── components/      # React Components\n│   │   ├── services/        # API-Aufrufe (Axios)\n│   │   ├── hooks/           # Custom Hooks\n│   │   └── pages/           # Seiten/Views\n│   └── public/\n├── backend/\n│   ├── routes/              # Express Routes\n│   ├── middleware/          # Auth, CORS, etc.\n│   ├── database/\n│   │   ├── connection.js    # DB Pool\n│   │   └── migrations/      # SQL Migrations\n│   └── server.js            # Entry Point\n└── scripts/\n    ├── deploy.sh            # Deployment Script\n    └── rollback.sh          # Rollback Script\n```\n\n## Repository\n\n- **GitHub:** https://github.com/samir-brkic/lernity.git (private)\n- **Lokale Kopie:** ~/.openclaw/workspace/projects/lernity\n\n## Zielgruppe\n\n- Schüler und Studenten die Vokabeln lernen\n- Nutzer die eine einfache, effektive Lernmethode suchen\n- Fokus auf Sprachenlernen (Deutsch ↔ Andere Sprachen)\n\n## Wichtige Dateien\n\n| Datei | Beschreibung |\n|-------|-------------|\n| `frontend/src/services/base/axiosConfig.js` | API-URL Konfiguration |\n| `backend/server.js` | Express Entry Point, CORS-Config |\n| `backend/database/connection.js` | PostgreSQL Pool |\n| `backend/.env` | Environment Variables (nicht im Repo!) |\n\n## Feature-IDs\n\n- **LERN-001:** Runtime-Config für API-URL\n- **LERN-002:** Deploy Scripts\n- **LERN-003:** DB Migration System\n- **LERN-004:** Prod-Server Git Setup\n- **LERN-005:** Test Nginx Setup\n\n---\n\n*Zuletzt aktualisiert: 2026-02-09*",
+      "color": "#db4d7b",
+      "tasks": [
+        {
+          "id": "2f340f69",
+          "title": "Runtime-Config für API-URL implementieren",
+          "description": "**Status:** 👀 Review\n**Bearbeitet von:** Frontend Developer\n\n**Änderungen:**\n- frontend/src/services/base/axiosConfig.js\n\n**Was wurde gemacht:**\n- API-URL wird automatisch anhand window.location.hostname erkannt\n- test.lernity.de → test.api.lernity.de\n- lernity.de → api.lernity.de\n- localhost → localhost:3001\n- REACT_APP_API_URL überschreibt bei Bedarf\n\n**Was steht aus:**\n- Review durch Samir\n- Test auf test.lernity.de (braucht LERN-005 Nginx)\n\n**Nächster Schritt nach Approval:**\n- Bereits auf Prod aktiv (wurde fälschlicherweise deployed)",
+          "status": "done",
+          "priority": "high",
+          "date": "8.2.2026",
+          "createdAt": "2026-02-08T22:08:06.207Z"
+        },
+        {
+          "id": "be03e144",
+          "title": "Deploy-Script erstellen (deploy.sh + rollback.sh)",
+          "description": "**Status:** 👀 Review\n**Bearbeitet von:** DevOps Agent\n\n**Änderungen:**\n- scripts/deploy.sh (neu)\n- scripts/rollback.sh (neu)\n\n**Was wurde gemacht:**\n- deploy.sh: DB-Backup, git checkout, npm install, migrate, build, pm2 restart, health-check\n- rollback.sh: Quick-Rollback mit optionalem DB-Restore\n- PM2 App-Name korrigiert: mein-backend\n- Web-Root korrigiert: /opt/vocab-app/frontend/build\n\n**Was steht aus:**\n- Review durch Samir\n- Dry-run Test\n\n**Nächster Schritt nach Approval:**\n- Neuen Tag erstellen (v1.1.0) und deploy.sh testen",
+          "status": "done",
+          "priority": "high",
+          "date": "8.2.2026",
+          "createdAt": "2026-02-08T22:08:11.464Z"
+        },
+        {
+          "id": "0758da79",
+          "title": "Migration-System für Datenbank einrichten",
+          "description": "**Status:** 👀 Review\n**Bearbeitet von:** Backend Developer\n\n**Änderungen:**\n- backend/migrate.js (neu)\n- backend/register-existing-migrations.js (neu)\n\n**Was wurde gemacht:**\n- migrate.js: Führt SQL-Dateien aus migrations/ aus, trackt in migrations-Tabelle\n- register-existing-migrations.js: Einmalig ausgeführt, 13 alte Migrationen registriert\n- Unterstützt: --status, --dry-run Flags\n- Transaktionen für Rollback bei Fehlern\n\n**Was steht aus:**\n- Review durch Samir\n\n**Nächster Schritt nach Approval:**\n- Bei neuen DB-Änderungen: SQL in migrations/ ablegen, migrate.js läuft beim Deploy",
+          "status": "done",
+          "priority": "medium",
+          "date": "8.2.2026",
+          "createdAt": "2026-02-08T22:08:16.086Z"
+        },
+        {
+          "id": "d0650e80",
+          "title": "Produktiv-Server (192.168.200.34) mit GitHub verbinden",
+          "description": "**Status:** 👀 Review\n**Bearbeitet von:** DevOps Agent\n\n**Änderungen:**\n- SSH Deploy Key auf Prod (192.168.200.34)\n- Git Remote: vocab-app.git → lernity.git\n- SSH Key auch für root (sudo git)\n\n**Was wurde gemacht:**\n- Ed25519 SSH Key generiert für GitHub\n- Remote auf git@github.com:samir-brkic/lernity.git umgestellt\n- 187 Commits (inkl. 23 nie gepushte) zu GitHub gepusht\n- .env Backup erstellt unter ~/.env.backup.lernity\n\n**Was steht aus:**\n- Review durch Samir\n\n**Nächster Schritt nach Approval:**\n- Fertig, Git-Workflow funktioniert",
+          "status": "done",
+          "priority": "high",
+          "date": "8.2.2026",
+          "createdAt": "2026-02-08T22:08:20.626Z"
+        },
+        {
+          "id": "e4a6ae71",
+          "title": "Nginx Reverse Proxy für Test-System konfigurieren",
+          "description": "Auf 192.168.200.40: test.lernity.de → 192.168.200.29:3002 (Frontend), test.api.lernity.de → 192.168.200.29:3001 (Backend). SSL-Zertifikate einrichten.",
+          "status": "todo",
+          "priority": "medium",
+          "date": "8.2.2026",
+          "createdAt": "2026-02-08T22:08:25.701Z"
+        },
+        {
+          "id": "d3dec3e6",
+          "title": "Landingpage Analyse & Redesign",
+          "description": "**Status:** 🔵 Planned\n**Agent:** Requirements Engineer\n**Feature-Spec:** features/LERN-006-landingpage-redesign.md\n\n## Ziel\nLandingpage analysieren und bei Bedarf Redesign-Konzept erstellen.\n\n## User Stories\n- Als Besucher möchte ich in 5 Sekunden verstehen was Lernity ist\n- Als Besucher möchte ich sehen wie die App aussieht\n- Als mobiler Nutzer möchte ich die Seite problemlos bedienen können\n\n## Analyse-Scope\n1. **Design:** Modern, professionell, Farben, Typografie\n2. **Inhalte:** Passen Texte zur App? Hero klar? FAQ relevant?\n3. **Conversion:** CTAs klar und auffällig? Richtig platziert?\n4. **Mobile:** Responsive? Touch-Targets? Performance?\n\n## Acceptance Criteria\n- [ ] Screenshots Desktop + Mobile\n- [ ] Checkliste abgearbeitet\n- [ ] Stärken/Schwächen dokumentiert\n- [ ] Redesign-Konzept (falls nötig)\n\n## Referenz-Dateien\n- frontend/src/components/Landing/LandingPage.js\n- frontend/src/components/Landing/LandingPage.module.css\n- frontend/src/components/EduQuest/i18n/locales/de/landing.json\n\n## Nächster Schritt\nAnalyse starten nach Samir Approval",
+          "status": "todo",
+          "priority": "medium",
+          "date": "9.2.2026",
+          "createdAt": "2026-02-09T01:27:26.836Z"
+        }
+      ],
+      "createdAt": "2026-02-08T18:33:46.432Z",
+      "projectPath": "/root/.openclaw/workspace/projects/lernity"
+    },
+    {
+      "id": "proj-eb904dc1",
+      "name": "OpenClaw Kanban Board",
+      "description": "React-basiertes Kanban Board für Projektmanagement. Features: Tasks, Drag&Drop, File Browser, Context-Files.",
+      "docs": "# OpenClaw Kanban Board",
+      "color": "#25b906",
+      "tasks": [
+        {
+          "id": "2c80814c",
+          "title": "Mobile Responsive Fix - Sidebar Navigation",
+          "description": "Sidebar ist auf mobilen Geräten nicht sichtbar/erreichbar. Hamburger-Menü oder Bottom-Navigation für Mobile implementieren.",
+          "status": "done",
+          "priority": "high",
+          "date": "8.2.2026",
+          "createdAt": "2026-02-08T22:21:43.779Z"
+        },
+        {
+          "id": "52ad5f9c",
+          "title": "Feature-Spec Verknüpfung im Task anzeigen",
+          "description": "**Status:** 🔵 Planned\n**Agent:** Requirements Engineer\n**Feature-Spec:** features/KB-002-feature-spec-link.md\n\n## Ziel\nTasks sollen eine sichtbare Verknuepfung zur Feature-Spec Datei haben.\n\n## User Stories\n- Als Agent moechte ich beim Laden eines Tasks die Feature-Spec sehen\n- Als User moechte ich im Task-Detail die Feature-Spec lesen koennen\n- Als User moechte ich mit einem Klick zur Feature-Spec navigieren\n\n## Acceptance Criteria\n- [ ] Feld Feature-Spec im Task-Detail anzeigen\n- [ ] Klick oeffnet File Browser oder zeigt Inhalt inline\n- [ ] Input-Feld beim Task bearbeiten\n\n## Technisch\n- API-Feld featureFile existiert bereits\n- Nur Frontend-Aenderungen noetig\n\n## Naechster Schritt\nFrontend Developer implementiert nach Approval",
+          "status": "todo",
+          "priority": "medium",
+          "date": "9.2.2026",
+          "createdAt": "2026-02-09T01:37:02.370Z"
+        },
+        {
+          "id": "17f8ebfb",
+          "title": "KB-003: Projekt-Chat Integration mit OpenClaw",
+          "description": "**Status:** 🔵 Planned\n**Agent:** Requirements Engineer\n\n## Ziel\nChat-Widget im Kanban Board einbauen, das direkt mit OpenClaw kommuniziert.\n\n## User Stories\n- Als User möchte ich aus dem Board heraus mit dem Agent chatten\n- Als User möchte ich dass der Agent automatisch den Projekt-Kontext kennt\n- Als Agent möchte ich wissen dass ich im Projekt-Modus arbeiten soll\n\n## Vorteile\n- Klarer Kontext: Board-Chat = Projekt-Arbeit mit Agent-Workflow\n- Telegram = Allgemeines, Quick-Fragen\n- Projekt + offene Tasks werden automatisch mitgeschickt\n\n## Technisch (grob)\n- Chat-Komponente im Frontend\n- API-Erweiterung für Messages\n- Routing zu OpenClaw Gateway\n- Kontext-Injection (Projekt, Tasks)\n\n## Nächster Schritt\nRequirements Engineer erstellt detaillierte Spec",
+          "status": "todo",
+          "priority": "high",
+          "date": "9.2.2026",
+          "createdAt": "2026-02-09T08:45:13.020Z"
+        }
+      ],
+      "createdAt": "2026-02-08T22:21:38.402Z"
     }
   ]
 }

@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard'
 import Projects from './pages/Projects'
 import Activities from './pages/Activities'
 import ContextFiles from './pages/ContextFiles'
+import Chat from './pages/Chat'
 import './styles/App.css'
 
 function App() {
@@ -58,6 +59,7 @@ function App() {
           />
           <Route path="/activities" element={<Activities />} />
           <Route path="/context" element={<ContextFiles />} />
+          <Route path="/chat/:projectId?" element={<Chat projects={projects} />} />
         </Routes>
       </main>
     </div>

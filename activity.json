@@ -1,3 +1,76 @@
 {
-  "activities": []
+  "activities": [
+    {
+      "id": "1770595130950",
+      "timestamp": "2026-02-08T23:58:50.950Z",
+      "type": "feature",
+      "title": "Agent-Team Workflow eingerichtet",
+      "description": "6 spezialisierte Agents (Requirements, Architect, Frontend, Backend, QA, DevOps) aus ai-coding-starter-kit adaptiert für unseren Tech-Stack (PostgreSQL, Express, React)",
+      "status": "completed",
+      "project": null
+    },
+    {
+      "id": "1770595136808",
+      "timestamp": "2026-02-08T23:58:56.808Z",
+      "type": "docs",
+      "title": "Feature-Specs überarbeitet",
+      "description": "LERN-001 bis LERN-005 nach Agent-Template aktualisiert: User Stories, Edge Cases, Abhängigkeiten, Zeitschätzungen hinzugefügt",
+      "status": "completed",
+      "project": "proj-8439559e"
+    },
+    {
+      "id": "1770595136820",
+      "timestamp": "2026-02-08T23:58:56.820Z",
+      "type": "docs",
+      "title": "PROJECT.md erstellt",
+      "description": "Projekt-Kontext für Lernity.de: Tech-Stack, Infrastruktur, wichtige Dateien. Auch im Kanban Context Tab hinterlegt.",
+      "status": "completed",
+      "project": "proj-8439559e"
+    },
+    {
+      "id": "1770595140871",
+      "timestamp": "2026-02-08T23:59:00.871Z",
+      "type": "feature",
+      "title": "Mobile Responsive Fix implementiert",
+      "description": "Hamburger-Menü für mobile Sidebar, Overlay, Auto-Close bei Auswahl",
+      "status": "completed",
+      "project": "proj-eb904dc1"
+    },
+    {
+      "id": "1770596628771",
+      "timestamp": "2026-02-09T00:23:48.771Z",
+      "type": "feature",
+      "title": "LERN-004: Prod-Server mit GitHub verbunden",
+      "description": "SSH Deploy Key eingerichtet, Remote auf lernity.git umgestellt, 187 Commits (inkl. 23 neue) zu GitHub gepusht, .env Backup erstellt",
+      "status": "completed",
+      "project": "proj-8439559e"
+    },
+    {
+      "id": "1770596667682",
+      "timestamp": "2026-02-09T00:24:27.682Z",
+      "type": "feature",
+      "title": "LERN-001: Runtime-Config implementiert",
+      "description": "API-URL wird jetzt automatisch anhand der Domain erkannt. Ein Build funktioniert für alle Umgebungen (lokal, test, prod).",
+      "status": "completed",
+      "project": "proj-8439559e"
+    },
+    {
+      "id": "1770596748093",
+      "timestamp": "2026-02-09T00:25:48.093Z",
+      "type": "feature",
+      "title": "LERN-003: Migration-System implementiert",
+      "description": "migrate.js für automatische DB-Migrationen, register-existing-migrations.js für einmalige Registrierung alter Migrationen",
+      "status": "completed",
+      "project": "proj-8439559e"
+    },
+    {
+      "id": "1770596819757",
+      "timestamp": "2026-02-09T00:26:59.757Z",
+      "type": "feature",
+      "title": "LERN-002: Deploy-Scripts erstellt",
+      "description": "deploy.sh (DB-Backup, Migrations, Build, Health-Check) und rollback.sh (Quick-Rollback mit optionalem DB-Restore)",
+      "status": "completed",
+      "project": "proj-8439559e"
+    }
+  ]
 }

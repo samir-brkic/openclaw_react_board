@@ -124,10 +124,10 @@
           "id": "912a3884",
           "title": "WebUI Chat-Eingabefeld und Layout-Bugs beheben",
           "description": "## Probleme\n\n1. **Chat zu schmal** - Der Chat wird sehr schmal angezeigt, nutzt nicht die volle Breite\n2. **Eingabefeld nicht responsiv** - Erweitert sich nicht vertikal bei viel Text\n3. **Keine Mehrzeilen-Eingabe** - ALT+ENTER für neue Zeile fehlt\n4. **Mobile nicht optimiert** - Muss auf mobilen Geräten funktionieren\n5. **Max-Höhe fehlt** - Eingabefeld soll sich nur begrenzt erweitern (nicht ganzen Bildschirm verdecken)\n\n## Anforderungen\n\n- Volle Fensterbreite nutzen\n- Responsive für Desktop und Mobile\n- Textarea auto-grow mit max-height\n- ALT+ENTER für Zeilenumbruch (ENTER = senden)\n- Übersichtliche Darstellung des geschriebenen Texts",
-          "status": "todo",
+          "status": "in-progress",
           "priority": "high",
           "date": "9.2.2026",
-          "featureFile": "KB-004-chat-input-improvements.md",
+          "featureFile": "features/KB-004-chat-input-improvements.md",
           "createdAt": "2026-02-09T11:57:13.824Z"
         }
       ],

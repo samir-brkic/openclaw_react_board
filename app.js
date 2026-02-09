@@ -343,8 +343,17 @@ app.get('/api/projects/:projectId/features/:taskId', (req, res) => {
     }
 
     try {
-        // featureFile is stored as "features/KB-002-name.md" - resolve it relative to projectPath
-        const filePath = path.join(project.projectPath, task.featureFile);
+        // featureFile can be stored as "features/KB-002-name.md" OR just "KB-002-name.md"
+        // Try to resolve it intelligently
+        let filePath = path.join(project.projectPath, task.featureFile);
+        
+        // If not found, try adding features/ prefix
+        if (!fs.existsSync(filePath) && !task.featureFile.startsWith('features/')) {
+            const withPrefix = path.join(project.projectPath, 'features', task.featureFile);
+            if (fs.existsSync(withPrefix)) {
+                filePath = withPrefix;
+            }
+        }
         
         if (!fs.existsSync(filePath)) {
             return res.status(404).json({ error: 'Feature-Datei nicht gefunden', path: task.featureFile });
@@ -391,8 +400,17 @@ app.put('/api/projects/:projectId/features/:taskId', (req, res) => {
     }
 
     try {
-        // featureFile is stored as "features/KB-002-name.md" - resolve it relative to projectPath
-        const filePath = path.join(project.projectPath, task.featureFile);
+        // featureFile can be stored as "features/KB-002-name.md" OR just "KB-002-name.md"
+        // Try to resolve it intelligently
+        let filePath = path.join(project.projectPath, task.featureFile);
+        
+        // If not found, try adding features/ prefix
+        if (!fs.existsSync(filePath) && !task.featureFile.startsWith('features/')) {
+            const withPrefix = path.join(project.projectPath, 'features', task.featureFile);
+            if (fs.existsSync(withPrefix)) {
+                filePath = withPrefix;
+            }
+        }
         
         if (!fs.existsSync(filePath)) {
             return res.status(404).json({ error: 'Feature-Datei nicht gefunden', path: task.featureFile });
@@ -730,7 +748,7 @@ app.get('/api/projects/:id/files', (req, res) => {
 // GET file content
 app.get('/api/projects/:id/files/*', (req, res) => {
     const { id } = req.params;
-    const filePath = req.params[0]; // Everything after /files/
+    let filePath = req.params[0]; // Everything after /files/
     
     const data = readData();
     const project = data.projects.find(p => p.id === id);
@@ -743,7 +761,16 @@ app.get('/api/projects/:id/files/*', (req, res) => {
         return res.status(400).json({ error: 'No project path configured' });
     }
 
-    const fullPath = path.join(project.projectPath, filePath);
+    let fullPath = path.join(project.projectPath, filePath);
+    
+    // If file not found and looks like a feature file, try features/ prefix
+    if (!fs.existsSync(fullPath) && !filePath.startsWith('features/') && filePath.match(/^[A-Z]+-\d+-.*\.md$/)) {
+        const withPrefix = path.join(project.projectPath, 'features', filePath);
+        if (fs.existsSync(withPrefix)) {
+            fullPath = withPrefix;
+            filePath = 'features/' + filePath;
+        }
+    }
     
     // Security: Ensure the path is within the project directory
     const normalizedProject = path.resolve(project.projectPath);
@@ -789,7 +816,7 @@ app.get('/api/projects/:id/files/*', (req, res) => {
 // PUT save file content
 app.put('/api/projects/:id/files/*', (req, res) => {
     const { id } = req.params;
-    const filePath = req.params[0];
+    let filePath = req.params[0];
     const { content } = req.body;
     
     const data = readData();
@@ -807,7 +834,16 @@ app.put('/api/projects/:id/files/*', (req, res) => {
         return res.status(400).json({ error: 'Content required' });
     }
 
-    const fullPath = path.join(project.projectPath, filePath);
+    let fullPath = path.join(project.projectPath, filePath);
+    
+    // If file not found and looks like a feature file, try features/ prefix
+    if (!fs.existsSync(fullPath) && !filePath.startsWith('features/') && filePath.match(/^[A-Z]+-\d+-.*\.md$/)) {
+        const withPrefix = path.join(project.projectPath, 'features', filePath);
+        if (fs.existsSync(withPrefix)) {
+            fullPath = withPrefix;
+            filePath = 'features/' + filePath;
+        }
+    }
     
     // Security: Ensure the path is within the project directory
     const normalizedProject = path.resolve(project.projectPath);
@@ -1096,10 +1132,10 @@ Antworte auf Deutsch. Sei präzise und zeige deinen Denkprozess.`;
         
         console.log('[CHAT] Starting SSE stream...');
         
-        // Keepalive pings
+        // Keepalive pings - every 5 seconds to prevent browser timeout
         const keepalive = setInterval(() => {
             res.write(': keepalive\n\n');
-        }, 15000);
+        }, 5000);
         
         try {
             const controller = new AbortController();

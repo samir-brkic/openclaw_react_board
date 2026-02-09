@@ -2055,35 +2055,10 @@
             // Switch to file browser tab
             switchProjectTab('files');
             
-            // Wait a bit for the file browser to render, then navigate to the file
-            setTimeout(async () => {
-                // Get the project path
-                const projects = await fetchProjects();
-                const project = projects.find(p => p.id === activeProjectId);
-                if (!project?.projectPath) {
-                    alert('Projekt-Pfad nicht konfiguriert');
-                    return;
-                }
-                
-                // Construct the relative path for the API
-                const fullPath = project.projectPath + '/' + featureFile;
-                
-                // Try to open the file directly using the correct API endpoint
-                try {
-                    const response = await fetch(`/api/projects/${activeProjectId}/files/${featureFile}`);
-                    if (response.ok) {
-                        const data = await response.json();
-                        // The new API returns content directly, not type
-                        if (data.content !== undefined) {
-                            // Open file in editor
-                            openFileInEditor(fullPath, data.content, data.name);
-                        }
-                    } else {
-                        alert('Feature-Datei nicht gefunden: ' + featureFile);
-                    }
-                } catch (error) {
-                    console.error('Error opening feature file:', error);
-                }
+            // Wait a bit for the file browser to render, then open the file
+            setTimeout(() => {
+                // Use the existing openFile function which handles everything
+                openFile(featureFile);
             }, 300);
         }
 
@@ -2148,35 +2123,10 @@
             // Switch to file browser tab
             switchProjectTab('files');
             
-            // Wait a bit for the file browser to render, then navigate to the file
-            setTimeout(async () => {
-                // Get the project path
-                const projects = await fetchProjects();
-                const project = projects.find(p => p.id === activeProjectId);
-                if (!project?.projectPath) {
-                    alert('Projekt-Pfad nicht konfiguriert');
-                    return;
-                }
-                
-                // Construct full path for the editor
-                const fullPath = project.projectPath + '/' + featureFile;
-                
-                // Try to open the file directly using the correct API endpoint
-                try {
-                    const response = await fetch(`/api/projects/${activeProjectId}/files/${featureFile}`);
-                    if (response.ok) {
-                        const data = await response.json();
-                        // The new API returns content directly
-                        if (data.content !== undefined) {
-                            // Open file in editor
-                            openFileInEditor(fullPath, data.content, data.name);
-                        }
-                    } else {
-                        alert('Feature-Datei nicht gefunden: ' + featureFile);
-                    }
-                } catch (error) {
-                    console.error('Error opening feature file:', error);
-                }
+            // Wait a bit for the file browser to render, then open the file
+            setTimeout(() => {
+                // Use the existing openFile function which handles everything
+                openFile(featureFile);
             }, 300);
         }
 

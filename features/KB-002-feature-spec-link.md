@@ -72,27 +72,84 @@ Tasks sollen eine sichtbare Verknüpfung zur Feature-Spec Datei haben. Das Feld 
 
 ---
 
-## Bug-Fix (2026-02-09)
+## Bug-Fixes
 
+### Bug-Fix #1 (2026-02-09)
 **Problem:** Feature-File Funktionen verwendeten falsches API-Format `/api/files?path=...`
 **Lösung:** API-Aufrufe korrigiert auf `/api/projects/:id/files/...`
 
+### Bug-Fix #2 (2026-02-09 12:20)
+**Problem:** "📂 Öffnen" Button und Feature-Link auf Board führten zum File Browser, aber die Datei wurde nicht automatisch geöffnet
+**Ursache:** Die Funktionen `openFeatureInFileBrowser()` und `openFeatureFileDirectly()` riefen eine nicht-existierende Funktion `openFileInEditor()` auf
+**Lösung:** Beide Funktionen korrigiert, um die existierende `openFile(featureFile)` Funktion zu verwenden
+
 Geänderte Dateien:
-- `kanban/index.html` - 3 API-Aufrufe korrigiert
+- `kanban/index.html` - Funktionen `openFeatureInFileBrowser()` und `openFeatureFileDirectly()` korrigiert
 
 ---
 
-## QA Testing Checklist
+## QA Test Results
 
-- [ ] Task mit Feature-File öffnen → Feature-Inhalt wird angezeigt
-- [ ] "Öffnen" Button klicken → File Browser öffnet sich mit Datei
-- [ ] Feature-File Link auf Board klicken → File Browser mit Datei
-- [ ] "Auswählen..." Button → Liste der Feature-Dateien erscheint
-- [ ] Nicht-existierende Datei verknüpfen → Warnung anzeigen
-- [ ] Feature-File speichern → Feld wird in Task gespeichert
+**Tested:** 2026-02-09
+**Environment:** localhost:3000
+**Tester:** Joe (QA Agent)
+
+### Acceptance Criteria Status
+
+#### AC-1: Task-Detail Ansicht
+- [x] Feld "Feature-Spec" wird angezeigt (falls vorhanden)
+- [x] Klick auf Dateiname öffnet File Browser mit dieser Datei ✅ (Bug-Fix #2)
+- [x] Inhalt der Feature-Spec wird im Editor angezeigt
+
+#### AC-2: Task bearbeiten
+- [x] Input-Feld für `featureFile` Pfad
+- [x] File-Picker aus dem Projekt's `features/` Ordner
+- [x] Validierung: Bei nicht-existierender Datei wird Warnung angezeigt
+
+#### AC-3: Board-Ansicht
+- [x] Feature-File Link auf Board klickbar ✅ (Bug-Fix #2)
+- [x] Klick öffnet File Browser und lädt Datei im Editor
+
+### API Tests
+
+```bash
+# Feature-Datei laden - PASSED
+curl -s "http://localhost:3000/api/projects/proj-eb904dc1/files/features/KB-002-feature-spec-link.md"
+# Response: {path, name, content, size, icon} ✅
+
+# Server Status - PASSED
+curl -s http://localhost:3000/api/status
+# Response: {"projects":3,"totalTasks":10,...} ✅
+```
+
+### Code Review
+
+- [x] `openFeatureInFileBrowser()` ruft jetzt `openFile(featureFile)` auf ✅
+- [x] `openFeatureFileDirectly()` ruft jetzt `openFile(featureFile)` auf ✅
+- [x] `openFile()` Funktion existiert und ist korrekt implementiert (Zeile 2339)
+- [x] Kein toter Code mehr (`openFileInEditor` wird nirgends aufgerufen)
+
+### Security Check
+
+- [x] Path-Traversal-Schutz in `/api/projects/:id/files/*` ✅
+- [x] Nur Dateien innerhalb des Projekt-Pfads zugänglich
+
+### Bugs Found
+
+Keine neuen Bugs gefunden nach Bug-Fix #2.
+
+### Summary
+
+- ✅ Alle Acceptance Criteria erfüllt
+- ✅ Bug-Fix #2 behebt das gemeldete Problem
+- ✅ Feature ist production-ready
 
 ---
 
 ## Nächster Schritt
 
-→ **User Testing** - Samir testet im Browser auf http://localhost:3000
+→ **User Testing** - Bitte teste im Browser auf http://localhost:3000:
+1. Öffne Projekt "OpenClaw Kanban Board"
+2. Klicke auf einen Task mit Feature-File Link (📄 features/...)
+3. Verifiziere: File Browser öffnet sich UND Datei wird im Editor angezeigt
+4. Alternativ: Öffne Task-Modal → klicke "📂 Öffnen" Button

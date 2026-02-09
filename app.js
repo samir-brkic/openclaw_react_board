@@ -1144,8 +1144,18 @@ Antworte auf Deutsch. Sei präzise und zeige deinen Denkprozess.`;
 // Background message processing function
 async function processMessageInBackground(projectId, sessionId, messageId, messages) {
     try {
-        console.log('[CHAT] Background: Calling Gateway...');
+        console.log('[CHAT] Background: Calling Gateway for', messageId);
         
+        // Update to streaming status
+        updateMessageStatus(projectId, sessionId, messageId, 'streaming', '');
+        
+        const controller = new AbortController();
+        const timeout = setTimeout(() => {
+            console.log('[CHAT] Background: Timeout after 5 min for', messageId);
+            controller.abort();
+        }, 300000); // 5 min timeout
+        
+        // Use NON-streaming for reliability - agent may use tools which don't stream
         const response = await fetch(`${OPENCLAW_GATEWAY_URL}/v1/chat/completions`, {
             method: 'POST',
             headers: {
@@ -1154,11 +1164,14 @@ async function processMessageInBackground(projectId, sessionId, messageId, messa
             },
             body: JSON.stringify({
                 model: 'openclaw',
-                stream: true,
+                stream: false,  // Non-streaming is more reliable with tool-using agents
                 user: `kanban-${projectId}-${sessionId}`,
                 messages
-            })
+            }),
+            signal: controller.signal
         });
+        
+        clearTimeout(timeout);
         
         if (!response.ok) {
             const errorText = await response.text();
@@ -1167,51 +1180,20 @@ async function processMessageInBackground(projectId, sessionId, messageId, messa
             return;
         }
         
-        console.log('[CHAT] Background: Reading stream...');
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content || '';
         
-        let fullContent = '';
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let chunkCount = 0;
-        
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            
-            const chunk = decoder.decode(value);
-            const lines = chunk.split('\n');
-            
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    const data = line.slice(6);
-                    if (data === '[DONE]') {
-                        // Streaming complete
-                    } else {
-                        try {
-                            const parsed = JSON.parse(data);
-                            const delta = parsed.choices?.[0]?.delta?.content;
-                            if (delta) {
-                                fullContent += delta;
-                                chunkCount++;
-                                
-                                // Update message every 5 chunks (reduce disk writes)
-                                if (chunkCount % 5 === 0) {
-                                    updateMessageStatus(projectId, sessionId, messageId, 'streaming', fullContent);
-                                }
-                            }
-                        } catch (e) {}
-                    }
-                }
-            }
-        }
-        
-        // Final update with complete status
-        console.log('[CHAT] Background: Complete, content length:', fullContent.length);
-        updateMessageStatus(projectId, sessionId, messageId, 'complete', fullContent);
+        console.log('[CHAT] Background: Complete for', messageId, '- content:', content.length, 'chars');
+        updateMessageStatus(projectId, sessionId, messageId, 'complete', content || '(Keine Antwort vom Agent)');
         
     } catch (error) {
-        console.error('[CHAT] Background: Error:', error);
-        updateMessageStatus(projectId, sessionId, messageId, 'error', `Fehler: ${error.message}`);
+        if (error.name === 'AbortError') {
+            console.log('[CHAT] Background: Aborted (timeout) for', messageId);
+            updateMessageStatus(projectId, sessionId, messageId, 'error', 'Timeout - Agent hat zu lange gebraucht');
+        } else {
+            console.error('[CHAT] Background: Error for', messageId, '-', error.message);
+            updateMessageStatus(projectId, sessionId, messageId, 'error', `Fehler: ${error.message}`);
+        }
     }
 }
 

@@ -2814,13 +2814,13 @@
         function renderChatMessages() {
             const container = document.getElementById('chatMessages');
             container.innerHTML = chatMessages.map(m => `
-                <div style="display: flex; gap: 12px; margin-bottom: 16px; max-width: 95%; ${m.role === 'user' ? 'margin-left: auto; flex-direction: row-reverse;' : ''}">
-                    <div style="width: 36px; height: 36px; border-radius: 50%; background: ${m.role === 'user' ? 'var(--accent)' : 'var(--bg-tertiary)'}; 
+                <div style="display: flex; gap: 12px; margin-bottom: 16px; ${m.role === 'user' ? 'margin-left: auto; flex-direction: row-reverse;' : ''}">
+                    <div style="width: 36px; height: 36px; border-radius: 50%; background: ${m.role === 'user' ? 'var(--bg-tertiary)' : 'var(--bg-tertiary)'}; 
                                 display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;">
                         ${m.role === 'user' ? '👤' : '🤖'}
                     </div>
-                    <div style="background: ${m.role === 'user' ? 'var(--accent)' : 'var(--bg-secondary)'}; 
-                                padding: 12px 16px; border-radius: 12px; color: var(--text-primary); line-height: 1.5;">
+                    <div style="background: ${m.role === 'user' ? 'var(--bg-tertiary)' : 'var(--bg-secondary)'}; 
+                                padding: 12px 16px; border-radius: 12px; color: var(--text-primary); line-height: 1.5; border: ${m.role === 'user' ? '1px solid var(--border)' : 'none'};">
                         ${m.role === 'assistant' ? marked.parse(m.content) : '<p>' + escapeHtml(m.content) + '</p>'}
                     </div>
                 </div>
@@ -2970,13 +2970,13 @@
                 }
                 
                 return `
-                    <div style="display: flex; gap: 12px; margin-bottom: 16px; max-width: 95%; ${m.role === 'user' ? 'margin-left: auto; flex-direction: row-reverse;' : ''}">
-                        <div style="width: 36px; height: 36px; border-radius: 50%; background: ${m.role === 'user' ? 'var(--accent)' : 'var(--bg-tertiary)'}; 
+                    <div style="display: flex; gap: 12px; margin-bottom: 16px; ${m.role === 'user' ? 'margin-left: auto; flex-direction: row-reverse;' : ''}">
+                        <div style="width: 36px; height: 36px; border-radius: 50%; background: ${m.role === 'user' ? 'var(--bg-tertiary)' : 'var(--bg-tertiary)'}; 
                                     display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;">
                             ${m.role === 'user' ? '👤' : '🤖'}
                         </div>
-                        <div style="background: ${m.role === 'user' ? 'var(--accent)' : 'var(--bg-secondary)'}; 
-                                    padding: 12px 16px; border-radius: 12px; color: var(--text-primary); line-height: 1.5;">
+                        <div style="background: ${m.role === 'user' ? 'var(--bg-tertiary)' : 'var(--bg-secondary)'}; 
+                                    padding: 12px 16px; border-radius: 12px; color: var(--text-primary); line-height: 1.5; border: ${m.role === 'user' ? '1px solid var(--border)' : 'none'};">
                             ${contentHtml}
                         </div>
                     </div>
@@ -3011,6 +3011,78 @@
             }
             .chat-session-item:hover {
                 background: rgba(88, 166, 255, 0.1) !important;
+            }
+            
+            /* Chat Message Styles - Full Width */
+            #chatMessages > div {
+                max-width: 100% !important;
+            }
+            
+            /* Better table styling in chat messages */
+            #chatMessages table {
+                border-collapse: collapse;
+                width: 100%;
+                margin: 12px 0;
+                font-size: 13px;
+                overflow-x: auto;
+                display: block;
+            }
+            #chatMessages th, #chatMessages td {
+                border: 1px solid var(--border);
+                padding: 8px 12px;
+                text-align: left;
+                white-space: nowrap;
+            }
+            #chatMessages th {
+                background: var(--bg-tertiary);
+                font-weight: 600;
+            }
+            #chatMessages tr:hover {
+                background: rgba(88, 166, 255, 0.05);
+            }
+            
+            /* Code blocks in chat */
+            #chatMessages pre {
+                background: var(--bg-tertiary);
+                padding: 12px;
+                border-radius: 6px;
+                overflow-x: auto;
+                margin: 8px 0;
+            }
+            #chatMessages code {
+                font-family: 'Courier New', monospace;
+                font-size: 13px;
+            }
+            
+            /* Prevent word-break issues */
+            #chatMessages p {
+                word-break: break-word;
+                margin: 0 0 8px 0;
+            }
+            #chatMessages p:last-child {
+                margin-bottom: 0;
+            }
+            
+            /* Fix list styling - bullets inside bubble */
+            #chatMessages ul, #chatMessages ol {
+                margin: 8px 0;
+                padding-left: 24px;
+                list-style-position: inside;
+            }
+            #chatMessages li {
+                margin: 4px 0;
+                word-break: break-word;
+            }
+            
+            /* Headers in chat */
+            #chatMessages h1, #chatMessages h2, #chatMessages h3, 
+            #chatMessages h4, #chatMessages h5, #chatMessages h6 {
+                margin: 12px 0 8px 0;
+                color: var(--text-primary);
+            }
+            #chatMessages h1:first-child, #chatMessages h2:first-child, 
+            #chatMessages h3:first-child {
+                margin-top: 0;
             }
         `;
         document.head.appendChild(chatStyle);

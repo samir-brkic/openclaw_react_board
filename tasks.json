@@ -104,8 +104,8 @@
         {
           "id": "52ad5f9c",
           "title": "Feature-Spec Verknüpfung im Task anzeigen",
-          "description": "**Status:** 🔵 Zurückgesetzt (zur Überprüfung)\n**Feature-Spec:** features/KB-002-feature-spec-link.md\n\n## Ziel\nTasks sollen eine sichtbare Verknüpfung zur Feature-Spec Datei haben.\n\n## User Stories\n- Als Agent möchte ich beim Laden eines Tasks die Feature-Spec sehen\n- Als User möchte ich im Task-Detail die Feature-Spec lesen können\n- Als User möchte ich mit einem Klick zur Feature-Spec navigieren\n\n## Acceptance Criteria\n- [ ] Feld Feature-Spec im Task-Detail anzeigen\n- [ ] Klick öffnet File Browser oder zeigt Inhalt inline\n- [ ] Input-Feld beim Task bearbeiten\n- [ ] Validierung: Datei muss existieren\n\n## Notiz\nTask wurde von isolierter Chat-Session überschrieben. Originale Anforderungen wiederhergestellt aus Feature-Spec.\n\n## Implementierung (ungeprüft)\nLaut Session-Log wurde implementiert:\n- Backend: featureFile bei Task-Erstellung\n- Frontend: Feature-File Input im Task Modal\n- Frontend: Öffnen/Auswählen Buttons\n- Frontend: Klickbares Feature-File auf dem Board\n\n→ **Muss getestet werden ob alles funktioniert!**",
-          "status": "todo",
+          "description": "**Status:** 🟡 In Progress (QA Testing erforderlich)\n**Agent:** Frontend Developer\n**Feature-Spec:** features/KB-002-feature-spec-link.md\n\n## Ziel\nTasks sollen eine sichtbare Verknüpfung zur Feature-Spec Datei haben.\n\n## Was wurde gemacht\n- ✅ Feature-File Input im Task Modal\n- ✅ Status-Anzeige (verknüpft/nicht verknüpft/nicht gefunden)\n- ✅ \"Öffnen\" und \"Auswählen...\" Buttons\n- ✅ Klickbares Feature-File auf dem Board (📄 Link)\n- ✅ API-Aufrufe korrigiert (Bug-Fix)\n\n## Bug-Fix\nDie Feature-File Funktionen verwendeten das falsche API-Format. Korrigiert auf `/api/projects/:id/files/...`.\n\n## Was steht aus\n- User Testing durch Samir\n- QA Checkliste abarbeiten\n\n## QA Testing Checklist\n- [ ] Task mit Feature-File öffnen → Feature-Inhalt wird angezeigt\n- [ ] \"Öffnen\" Button klicken → File Browser öffnet sich\n- [ ] Feature-File Link auf Board klicken → File Browser mit Datei\n- [ ] \"Auswählen...\" Button → Liste der Feature-Dateien\n- [ ] Nicht-existierende Datei → Warnung anzeigen",
+          "status": "in-progress",
           "priority": "medium",
           "date": "9.2.2026",
           "createdAt": "2026-02-09T01:37:02.370Z",
@@ -121,7 +121,8 @@
           "createdAt": "2026-02-09T08:45:13.020Z"
         }
       ],
-      "createdAt": "2026-02-08T22:21:38.402Z"
+      "createdAt": "2026-02-08T22:21:38.402Z",
+      "projectPath": "/root/.openclaw/workspace/kanban"
     }
   ]
 }

@@ -2065,15 +2065,16 @@
                     return;
                 }
                 
-                // Construct full path and open the file
+                // Construct the relative path for the API
                 const fullPath = project.projectPath + '/' + featureFile;
                 
-                // Try to open the file directly
+                // Try to open the file directly using the correct API endpoint
                 try {
-                    const response = await fetch(`/api/files?path=${encodeURIComponent(fullPath)}`);
+                    const response = await fetch(`/api/projects/${activeProjectId}/files/${featureFile}`);
                     if (response.ok) {
                         const data = await response.json();
-                        if (data.type === 'file') {
+                        // The new API returns content directly, not type
+                        if (data.content !== undefined) {
                             // Open file in editor
                             openFileInEditor(fullPath, data.content, data.name);
                         }
@@ -2096,15 +2097,17 @@
                 return;
             }
             
-            const featuresPath = project.projectPath + '/features';
-            
             try {
-                const response = await fetch(`/api/files?path=${encodeURIComponent(featuresPath)}`);
+                // Use the correct API endpoint for listing files
+                const response = await fetch(`/api/projects/${activeProjectId}/files`);
                 if (response.ok) {
                     const data = await response.json();
-                    if (data.type === 'directory' && data.children?.length > 0) {
+                    // Find the features folder in the tree
+                    const featuresFolder = data.tree?.find(f => f.name === 'features' && f.type === 'directory');
+                    
+                    if (featuresFolder && featuresFolder.children?.length > 0) {
                         // Filter for .md files
-                        const mdFiles = data.children.filter(f => f.name.endsWith('.md'));
+                        const mdFiles = featuresFolder.children.filter(f => f.name.endsWith('.md'));
                         
                         if (mdFiles.length === 0) {
                             alert('Keine Feature-Dateien (.md) im features/ Ordner gefunden.');
@@ -2129,7 +2132,7 @@
                     const create = confirm('Der features/ Ordner existiert nicht. Möchten Sie ihn anlegen?');
                     if (create) {
                         // Create features folder (would need API support)
-                        alert('Bitte den Ordner manuell anlegen: ' + featuresPath);
+                        alert('Bitte den Ordner manuell anlegen: features/');
                     }
                 }
             } catch (error) {
@@ -2155,15 +2158,16 @@
                     return;
                 }
                 
-                // Construct full path and open the file
+                // Construct full path for the editor
                 const fullPath = project.projectPath + '/' + featureFile;
                 
-                // Try to open the file directly
+                // Try to open the file directly using the correct API endpoint
                 try {
-                    const response = await fetch(`/api/files?path=${encodeURIComponent(fullPath)}`);
+                    const response = await fetch(`/api/projects/${activeProjectId}/files/${featureFile}`);
                     if (response.ok) {
                         const data = await response.json();
-                        if (data.type === 'file') {
+                        // The new API returns content directly
+                        if (data.content !== undefined) {
                             // Open file in editor
                             openFileInEditor(fullPath, data.content, data.name);
                         }

@@ -1004,19 +1004,42 @@ app.post('/api/projects/:projectId/chat/sessions/:sessionId/messages', async (re
     const contextTaskId = taskId || session.taskId;
     const task = contextTaskId ? project.tasks?.find(t => t.id === contextTaskId) : null;
     
-    // Build the task description for the sub-agent
-    let taskDescription = `Projekt: ${project.name}\n`;
+    // Build comprehensive task description with workflow instructions
+    let taskDescription = `# Kanban Board Task\n\n`;
+    taskDescription += `## Projekt: ${project.name}\n`;
+    
+    if (project.docs) {
+        taskDescription += `\n### Projekt-Dokumentation\n${project.docs}\n`;
+    }
+    
     if (task) {
-        taskDescription += `Task: ${task.title} (${task.id})\n`;
-        taskDescription += `Status: ${task.status}\n`;
-        if (task.description) {
-            taskDescription += `\nBeschreibung:\n${task.description}\n`;
-        }
+        taskDescription += `\n## Task: ${task.title}\n`;
+        taskDescription += `- **ID:** ${task.id}\n`;
+        taskDescription += `- **Status:** ${task.status}\n`;
+        taskDescription += `- **Priorität:** ${task.priority || 'medium'}\n`;
+        
         if (task.featureFile) {
-            taskDescription += `\nFeature-Spec: ${task.featureFile}\n`;
+            taskDescription += `- **Feature-Spec:** ${task.featureFile} (LIES DIESE DATEI für Details!)\n`;
+        }
+        
+        if (task.description) {
+            taskDescription += `\n### Task-Beschreibung\n${task.description}\n`;
         }
     }
-    taskDescription += `\nUser-Anfrage: ${content}`;
+    
+    taskDescription += `\n## Workflow-Anweisungen\n`;
+    taskDescription += `1. Lies AGENTS.md und den passenden Agent aus agents/ (z.B. agents/frontend-dev.md)\n`;
+    taskDescription += `2. Lies MEMORY.md für Kontext und frühere Entscheidungen\n`;
+    taskDescription += `3. Wenn eine Feature-Spec existiert, lies sie vollständig\n`;
+    taskDescription += `4. Befolge den Agent-Workflow strikt (Requirements → Architect → Dev → QA → DevOps)\n`;
+    taskDescription += `5. Aktualisiere den Task-Status via API wenn fertig\n`;
+    taskDescription += `6. Überschreibe NIEMALS die ursprünglichen Anforderungen im Task!\n`;
+    
+    taskDescription += `\n## User-Anfrage\n${content}\n`;
+    
+    taskDescription += `\n## API-Endpunkte\n`;
+    taskDescription += `- Task-Status updaten: PUT http://localhost:3000/api/projects/${projectId}/tasks/${contextTaskId || 'TASK_ID'}\n`;
+    taskDescription += `- Body: {"status": "in-progress|done", "description": "..."}\n`;
     
     // Use sessions_spawn via Tools Invoke API for background processing
     const wantStream = req.query.stream === 'true' || req.headers.accept === 'text/event-stream';
@@ -1062,9 +1085,22 @@ app.post('/api/projects/:projectId/chat/sessions/:sessionId/messages', async (re
             const spawnResult = await spawnResponse.json();
             console.log('[CHAT] Spawn result:', JSON.stringify(spawnResult));
             
-            // The spawn is async - agent will work in background
-            // For now, send a confirmation and the result will come via announcement
-            const resultContent = spawnResult.result?.content || spawnResult.result || 'Sub-Agent gestartet. Ergebnis kommt gleich...';
+            // Parse the spawn response - it's nested in result.details
+            const details = spawnResult.result?.details || {};
+            const status = details.status || 'unknown';
+            const childSession = details.childSessionKey || '';
+            const runId = details.runId || '';
+            
+            let resultContent;
+            if (status === 'accepted') {
+                resultContent = `✅ Sub-Agent gestartet!\n\n` +
+                    `**Status:** ${status}\n` +
+                    `**Run-ID:** \`${runId.slice(0, 8)}...\`\n\n` +
+                    `Der Agent arbeitet jetzt im Hintergrund an deiner Anfrage. ` +
+                    `Das Ergebnis wird hier angezeigt sobald er fertig ist.`;
+            } else {
+                resultContent = `⚠️ Spawn-Status: ${status}\n${JSON.stringify(details, null, 2)}`;
+            }
             
             res.write(`data: ${JSON.stringify({ choices: [{ delta: { content: resultContent } }] })}\n\n`);
             res.write('data: [DONE]\n\n');
@@ -1111,13 +1147,24 @@ app.post('/api/projects/:projectId/chat/sessions/:sessionId/messages', async (re
             }
             
             const spawnResult = await spawnResponse.json();
-            const resultContent = spawnResult.result?.content || spawnResult.result || 'Sub-Agent gestartet...';
+            
+            // Parse the spawn response
+            const details = spawnResult.result?.details || {};
+            const status = details.status || 'unknown';
+            const runId = details.runId || '';
+            
+            let resultContent;
+            if (status === 'accepted') {
+                resultContent = `✅ Sub-Agent gestartet! Run-ID: ${runId.slice(0, 8)}... - Ergebnis kommt gleich.`;
+            } else {
+                resultContent = `⚠️ Spawn-Status: ${status}`;
+            }
             
             // Save assistant message
             const assistantMessage = {
                 id: uuidv4().slice(0, 8),
                 role: 'assistant',
-                content: typeof resultContent === 'string' ? resultContent : JSON.stringify(resultContent),
+                content: resultContent,
                 timestamp: new Date().toISOString()
             };
             session.messages.push(assistantMessage);

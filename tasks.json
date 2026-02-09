@@ -113,8 +113,8 @@
         {
           "id": "17f8ebfb",
           "title": "KB-003: Projekt-Chat Integration mit OpenClaw",
-          "description": "**Status:** 🔵 Planned\n**Agent:** Requirements Engineer\n\n## Ziel\nChat-Widget im Kanban Board einbauen, das direkt mit OpenClaw kommuniziert.\n\n## User Stories\n- Als User möchte ich aus dem Board heraus mit dem Agent chatten\n- Als User möchte ich dass der Agent automatisch den Projekt-Kontext kennt\n- Als Agent möchte ich wissen dass ich im Projekt-Modus arbeiten soll\n\n## Vorteile\n- Klarer Kontext: Board-Chat = Projekt-Arbeit mit Agent-Workflow\n- Telegram = Allgemeines, Quick-Fragen\n- Projekt + offene Tasks werden automatisch mitgeschickt\n\n## Technisch (grob)\n- Chat-Komponente im Frontend\n- API-Erweiterung für Messages\n- Routing zu OpenClaw Gateway\n- Kontext-Injection (Projekt, Tasks)\n\n## Nächster Schritt\nRequirements Engineer erstellt detaillierte Spec",
-          "status": "todo",
+          "description": "**Status:** 🟡 In Progress\n**Agent:** Frontend Developer\n\n## Implementiert\n- ✅ Backend: Chat API + Gateway-Proxy\n- ✅ Frontend: Chat-Tab + Sessions\n- ✅ Frontend: Streaming Messages\n- ✅ Frontend: Markdown Rendering\n\n## Testing\n- [ ] UI im Browser testen\n- [ ] Sessions erstellen/löschen\n- [ ] Messages senden\n- [ ] Streaming funktioniert\n\n## Nächster Schritt\nQA Testing durch User",
+          "status": "in-progress",
           "priority": "high",
           "date": "9.2.2026",
           "createdAt": "2026-02-09T08:45:13.020Z"

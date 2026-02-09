@@ -1335,6 +1335,7 @@
             </div>
             <div style="display: flex; gap: 0.5rem;">
                 <button class="btn" onclick="saveTaskContent()" style="flex: 1;">Speichern</button>
+                <button class="btn" onclick="openTaskInChat()" style="flex: 0; background: var(--accent); border: none;">💬 Im Chat öffnen</button>
                 <button class="btn" onclick="closeTaskModal()" style="flex: 0; background: var(--bg-tertiary); border: 1px solid var(--border);">Abbrechen</button>
             </div>
         </div>
@@ -1388,9 +1389,15 @@
         <div style="display: flex; height: 100%;">
             <!-- Chat Sessions Sidebar -->
             <div id="chatSessionsSidebar" style="width: 250px; background: var(--bg-secondary); border-right: 1px solid var(--border); display: flex; flex-direction: column;">
+                <div style="padding: 16px; border-bottom: 1px solid var(--border);">
+                    <label style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px;">Projekt</label>
+                    <select id="chatProjectSelect" onchange="onChatProjectChange()" style="width: 100%; margin-top: 6px; background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-primary); padding: 8px; border-radius: 4px; font-size: 13px;">
+                        <option value="">— Projekt wählen —</option>
+                    </select>
+                </div>
                 <div style="padding: 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border);">
                     <h3 style="margin: 0; color: var(--accent); font-size: 14px; text-transform: uppercase; letter-spacing: 1px;">Sessions</h3>
-                    <button onclick="createChatSession()" style="background: var(--accent); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">+ Neu</button>
+                    <button id="newSessionBtn" onclick="createChatSession()" style="background: var(--accent); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;" disabled>+ Neu</button>
                 </div>
                 <div id="chatSessionsList" style="flex: 1; overflow-y: auto; padding: 8px;"></div>
                 <div id="chatGatewayStatus" style="padding: 12px 16px; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary);">
@@ -2370,22 +2377,90 @@
         let chatMessages = [];
         let chatGatewayOnline = false;
         let chatLoading = false;
+        let chatProjectId = null; // Separates Projekt-ID für Chat
+        let currentTaskContext = null; // Task-Kontext wenn aus Task geöffnet
         
         async function initChat() {
             await checkChatGatewayStatus();
-            if (activeProjectId) {
+            populateChatProjectSelect();
+            
+            // Wenn ein Projekt aktiv ist, automatisch auswählen
+            if (activeProjectId && !chatProjectId) {
+                chatProjectId = activeProjectId;
+                document.getElementById('chatProjectSelect').value = chatProjectId;
+            }
+            
+            if (chatProjectId) {
+                document.getElementById('newSessionBtn').disabled = false;
                 await loadChatSessions();
                 document.getElementById('chatProjectName').textContent = 
-                    projects.find(p => p.id === activeProjectId)?.name || 'Chat';
+                    projects.find(p => p.id === chatProjectId)?.name || 'Chat';
             } else {
-                document.getElementById('chatMessages').innerHTML = `
-                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary);">
-                        <h3 style="color: var(--text-primary);">💬 Projekt-Chat</h3>
-                        <p>Wähle zuerst ein Projekt aus der Sidebar.</p>
-                    </div>
-                `;
+                document.getElementById('newSessionBtn').disabled = true;
+                showChatWelcome();
             }
         }
+        
+        function populateChatProjectSelect() {
+            const select = document.getElementById('chatProjectSelect');
+            const currentValue = select.value;
+            select.innerHTML = '<option value="">— Projekt wählen —</option>' +
+                projects.map(p => `<option value="${p.id}" ${p.id === chatProjectId ? 'selected' : ''}>${p.name}</option>`).join('');
+            if (currentValue) select.value = currentValue;
+        }
+        
+        async function onChatProjectChange() {
+            const select = document.getElementById('chatProjectSelect');
+            chatProjectId = select.value;
+            activeChatSession = null;
+            chatMessages = [];
+            chatSessions = [];
+            currentTaskContext = null;
+            
+            if (chatProjectId) {
+                document.getElementById('newSessionBtn').disabled = false;
+                document.getElementById('chatProjectName').textContent = 
+                    projects.find(p => p.id === chatProjectId)?.name || 'Chat';
+                await loadChatSessions();
+            } else {
+                document.getElementById('newSessionBtn').disabled = true;
+                document.getElementById('chatProjectName').textContent = 'Projekt Chat';
+                document.getElementById('chatSessionName').textContent = '';
+                showChatWelcome();
+                renderChatSessions();
+            }
+        }
+        
+        // Öffnet Chat mit Task-Kontext (aus Task-Modal)
+        async function openTaskInChat() {
+            if (!activeProjectId || !currentTaskId) return;
+            
+            const project = projects.find(p => p.id === activeProjectId);
+            const task = project?.tasks?.find(t => t.id === currentTaskId);
+            if (!task) return;
+            
+            // Speichere Task-Kontext
+            currentTaskContext = {
+                taskId: currentTaskId,
+                taskTitle: task.title
+            };
+            chatProjectId = activeProjectId;
+            
+            // Schließe Modal und wechsle zum Chat
+            closeTaskModal();
+            switchTab('chat');
+            
+            // Warte kurz bis Chat initialisiert
+            await new Promise(r => setTimeout(r, 100));
+            
+            // Setze Projekt im Dropdown
+            document.getElementById('chatProjectSelect').value = chatProjectId;
+            
+            // Erstelle neue Session mit Task-Kontext
+            await createChatSession(`Task: ${task.title.slice(0, 40)}`, currentTaskId);
+        }
+        
+        let currentTaskId = null; // Wird in openTaskModal gesetzt
         
         async function checkChatGatewayStatus() {
             try {
@@ -2400,10 +2475,10 @@
         }
         
         async function loadChatSessions() {
-            if (!activeProjectId) return;
+            if (!chatProjectId) return;
             
             try {
-                const res = await fetch(`/api/projects/${activeProjectId}/chat/sessions`);
+                const res = await fetch(`/api/projects/${chatProjectId}/chat/sessions`);
                 const data = await res.json();
                 chatSessions = data.sessions || [];
                 renderChatSessions();
@@ -2442,7 +2517,7 @@
         
         async function loadChatSession(sessionId) {
             try {
-                const res = await fetch(`/api/projects/${activeProjectId}/chat/sessions/${sessionId}`);
+                const res = await fetch(`/api/projects/${chatProjectId}/chat/sessions/${sessionId}`);
                 activeChatSession = await res.json();
                 chatMessages = activeChatSession.messages || [];
                 renderChatMessages();
@@ -2471,13 +2546,13 @@
         }
         
         async function createChatSession(title = 'Neue Session', taskId = null) {
-            if (!activeProjectId) {
+            if (!chatProjectId) {
                 alert('Bitte wähle zuerst ein Projekt.');
                 return;
             }
             
             try {
-                const res = await fetch(`/api/projects/${activeProjectId}/chat/sessions`, {
+                const res = await fetch(`/api/projects/${chatProjectId}/chat/sessions`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ title, taskId })
@@ -2494,7 +2569,7 @@
             if (!confirm('Session wirklich löschen?')) return;
             
             try {
-                await fetch(`/api/projects/${activeProjectId}/chat/sessions/${sessionId}`, {
+                await fetch(`/api/projects/${chatProjectId}/chat/sessions/${sessionId}`, {
                     method: 'DELETE'
                 });
                 chatSessions = chatSessions.filter(s => s.id !== sessionId);
@@ -2573,7 +2648,7 @@
             
             try {
                 // Use streaming
-                const res = await fetch(`/api/projects/${activeProjectId}/chat/sessions/${activeChatSession.id}/messages?stream=true`, {
+                const res = await fetch(`/api/projects/${chatProjectId}/chat/sessions/${activeChatSession.id}/messages?stream=true`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
                     body: JSON.stringify({ content })

@@ -104,17 +104,18 @@
         {
           "id": "52ad5f9c",
           "title": "Feature-Spec Verknüpfung im Task anzeigen",
-          "description": "**Status:** 🔵 Planned\n**Agent:** Requirements Engineer\n**Feature-Spec:** features/KB-002-feature-spec-link.md\n\n## Ziel\nTasks sollen eine sichtbare Verknuepfung zur Feature-Spec Datei haben.\n\n## User Stories\n- Als Agent moechte ich beim Laden eines Tasks die Feature-Spec sehen\n- Als User moechte ich im Task-Detail die Feature-Spec lesen koennen\n- Als User moechte ich mit einem Klick zur Feature-Spec navigieren\n\n## Acceptance Criteria\n- [ ] Feld Feature-Spec im Task-Detail anzeigen\n- [ ] Klick oeffnet File Browser oder zeigt Inhalt inline\n- [ ] Input-Feld beim Task bearbeiten\n\n## Technisch\n- API-Feld featureFile existiert bereits\n- Nur Frontend-Aenderungen noetig\n\n## Naechster Schritt\nFrontend Developer implementiert nach Approval",
-          "status": "todo",
+          "description": "**Status:** 🟡 In Progress\n**Agent:** Frontend Developer\n**Feature-Spec:** features/KB-002-feature-spec-link.md\n\n## Implementierung\n- ✅ Backend: featureFile bei Task-Erstellung\n- ✅ Frontend: Feature-File Input im Task Modal\n- ✅ Frontend: \"Öffnen\" Button für File Browser\n- ✅ Frontend: \"Auswählen\" Button für Feature-Picker\n- ✅ Frontend: Klickbares Feature-File auf dem Board\n- ⏳ Testing\n\n## Nächster Schritt\nManuelle Tests im Browser",
+          "status": "in-progress",
           "priority": "medium",
           "date": "9.2.2026",
-          "createdAt": "2026-02-09T01:37:02.370Z"
+          "createdAt": "2026-02-09T01:37:02.370Z",
+          "featureFile": "features/KB-002-feature-spec-link.md"
         },
         {
           "id": "17f8ebfb",
           "title": "KB-003: Projekt-Chat Integration mit OpenClaw",
-          "description": "**Status:** 🟡 In Progress\n**Agent:** Frontend Developer\n\n## Implementiert\n- ✅ Backend: Chat API + Gateway-Proxy\n- ✅ Frontend: Chat-Tab + Sessions\n- ✅ Frontend: Streaming Messages\n- ✅ Frontend: Markdown Rendering\n\n## Testing\n- [ ] UI im Browser testen\n- [ ] Sessions erstellen/löschen\n- [ ] Messages senden\n- [ ] Streaming funktioniert\n\n## Nächster Schritt\nQA Testing durch User",
-          "status": "in-progress",
+          "description": "**Status:** ✅ Done\n**Agent:** Frontend Developer\n**Getestet von:** Samir\n\n## Implementiert\n- ✅ Backend: Chat API + Gateway-Proxy\n- ✅ Frontend: Chat-Tab + Sessions\n- ✅ Frontend: Streaming Messages\n- ✅ Frontend: Markdown Rendering\n\n## Testing (durch Samir)\n- ✅ UI im Browser testen\n- ✅ Sessions erstellen/löschen\n- ✅ Messages senden\n- ✅ Streaming funktioniert\n\n## Ergebnis\nAlle Tests bestanden! Feature ist produktionsreif.",
+          "status": "done",
           "priority": "high",
           "date": "9.2.2026",
           "createdAt": "2026-02-09T08:45:13.020Z"

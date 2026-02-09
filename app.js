@@ -96,7 +96,7 @@ app.delete('/api/projects/:id', (req, res) => {
 // POST new task to project
 app.post('/api/projects/:projectId/tasks', (req, res) => {
     const { projectId } = req.params;
-    const { title, description, status, priority, date } = req.body;
+    const { title, description, status, priority, date, featureFile } = req.body;
 
     if (!title) {
         return res.status(400).json({ error: 'Title required' });
@@ -116,6 +116,7 @@ app.post('/api/projects/:projectId/tasks', (req, res) => {
         status: status || 'todo',
         priority: priority || 'medium',
         date: date || new Date().toLocaleDateString('de-DE'),
+        featureFile: featureFile || null,
         createdAt: new Date().toISOString()
     };
 

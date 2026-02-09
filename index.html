@@ -1325,6 +1325,20 @@
         <div class="modal-content" style="max-width: 700px;">
             <button class="modal-close" onclick="closeTaskModal()">✕</button>
             <div class="modal-header" id="taskModalTitle">Feature Details</div>
+            
+            <!-- Feature-Spec Verknüpfung -->
+            <div class="form-group" id="featureFileSection">
+                <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                    📄 Feature-Spec
+                    <span id="featureFileStatus" style="font-size: 0.75rem; color: var(--text-secondary);"></span>
+                </label>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                    <input type="text" id="featureFileInput" placeholder="z.B. features/KB-002-feature-name.md" style="flex: 1; padding: 0.5rem 0.75rem; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-primary); font-size: 0.85rem;">
+                    <button onclick="openFeatureInFileBrowser()" id="openFeatureBtn" style="background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--accent); padding: 0.5rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; white-space: nowrap; display: none;" title="Im File Browser öffnen">📂 Öffnen</button>
+                    <button onclick="pickFeatureFile()" style="background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-secondary); padding: 0.5rem 0.75rem; border-radius: 6px; cursor: pointer; font-size: 0.85rem; white-space: nowrap;" title="Feature-Datei auswählen">Auswählen...</button>
+                </div>
+            </div>
+            
             <div class="form-group">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
                     <label>Inhalt (Markdown)</label>
@@ -1561,7 +1575,7 @@
                         ${task.description ? `<div class="task-description">${task.description}</div>` : ''}
                         <div class="task-meta">
                             ${task.priority ? `<span class="task-priority priority-${task.priority}">${task.priority}</span>` : ''}
-                            ${task.featureFile ? `<span style="color: var(--accent);">📄 ${task.featureFile}</span>` : ''}
+                            ${task.featureFile ? `<span class="feature-file-link" onclick="event.stopPropagation(); openFeatureFileDirectly('${task.id}', '${task.featureFile}')" style="color: var(--accent); cursor: pointer; text-decoration: underline;" title="Feature-Spec im File Browser öffnen">📄 ${task.featureFile}</span>` : ''}
                             ${task.date ? `<span>${task.date}</span>` : ''}
                         </div>
                     </div>
@@ -1951,6 +1965,7 @@
 
         // Task Modal Functions
         let currentTaskId = null;
+        let currentTask = null;
         let isPreviewMode = false;
 
         async function openTaskModal(taskId) {
@@ -1963,6 +1978,40 @@
             const projects = await fetchProjects();
             const project = projects.find(p => p.id === activeProjectId);
             const task = project?.tasks?.find(t => t.id === taskId);
+            currentTask = task;
+
+            // Setup Feature-File Input
+            const featureFileInput = document.getElementById('featureFileInput');
+            const openFeatureBtn = document.getElementById('openFeatureBtn');
+            const featureFileStatus = document.getElementById('featureFileStatus');
+            
+            if (task) {
+                featureFileInput.value = task.featureFile || '';
+                
+                // Show/hide open button based on whether featureFile is set
+                if (task.featureFile) {
+                    openFeatureBtn.style.display = 'inline-block';
+                    featureFileStatus.textContent = '✓ verknüpft';
+                    featureFileStatus.style.color = 'var(--success)';
+                } else {
+                    openFeatureBtn.style.display = 'none';
+                    featureFileStatus.textContent = '(nicht verknüpft)';
+                    featureFileStatus.style.color = 'var(--text-secondary)';
+                }
+            }
+
+            // Update open button visibility when input changes
+            featureFileInput.oninput = function() {
+                if (this.value.trim()) {
+                    openFeatureBtn.style.display = 'inline-block';
+                    featureFileStatus.textContent = '(wird beim Speichern verknüpft)';
+                    featureFileStatus.style.color = 'var(--warning)';
+                } else {
+                    openFeatureBtn.style.display = 'none';
+                    featureFileStatus.textContent = '(nicht verknüpft)';
+                    featureFileStatus.style.color = 'var(--text-secondary)';
+                }
+            };
 
             // Only load feature file if the task has one defined
             if (task?.featureFile) {
@@ -1970,15 +2019,22 @@
                     const response = await fetch(`/api/projects/${activeProjectId}/features/${taskId}`);
                     if (response.ok) {
                         const data = await response.json();
-                        document.getElementById('taskModalTitle').textContent = data.filename;
+                        document.getElementById('taskModalTitle').textContent = task.title;
                         document.getElementById('taskContentInput').value = data.content;
                         document.getElementById('taskModal').classList.add('active');
                     } else {
-                        alert('Feature-Datei konnte nicht geladen werden');
+                        // Feature file not found - show warning but still open modal
+                        document.getElementById('taskModalTitle').textContent = task.title;
+                        document.getElementById('taskContentInput').value = task.description || '';
+                        featureFileStatus.textContent = '⚠ Datei nicht gefunden';
+                        featureFileStatus.style.color = 'var(--danger)';
+                        document.getElementById('taskModal').classList.add('active');
                     }
                 } catch (error) {
                     console.error('Error loading feature:', error);
-                    alert('Fehler beim Laden');
+                    document.getElementById('taskModalTitle').textContent = task.title;
+                    document.getElementById('taskContentInput').value = task.description || '';
+                    document.getElementById('taskModal').classList.add('active');
                 }
             } else if (task) {
                 // Regular task or task without feature file - just show info
@@ -1986,6 +2042,138 @@
                 document.getElementById('taskContentInput').value = task.description || '';
                 document.getElementById('taskModal').classList.add('active');
             }
+        }
+
+        // Open feature file in the file browser tab
+        async function openFeatureInFileBrowser() {
+            const featureFile = document.getElementById('featureFileInput').value.trim();
+            if (!featureFile) return;
+            
+            // Close the modal
+            closeTaskModal();
+            
+            // Switch to file browser tab
+            switchProjectTab('files');
+            
+            // Wait a bit for the file browser to render, then navigate to the file
+            setTimeout(async () => {
+                // Get the project path
+                const projects = await fetchProjects();
+                const project = projects.find(p => p.id === activeProjectId);
+                if (!project?.projectPath) {
+                    alert('Projekt-Pfad nicht konfiguriert');
+                    return;
+                }
+                
+                // Construct full path and open the file
+                const fullPath = project.projectPath + '/' + featureFile;
+                
+                // Try to open the file directly
+                try {
+                    const response = await fetch(`/api/files?path=${encodeURIComponent(fullPath)}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.type === 'file') {
+                            // Open file in editor
+                            openFileInEditor(fullPath, data.content, data.name);
+                        }
+                    } else {
+                        alert('Feature-Datei nicht gefunden: ' + featureFile);
+                    }
+                } catch (error) {
+                    console.error('Error opening feature file:', error);
+                }
+            }, 300);
+        }
+
+        // Pick a feature file from the features directory
+        async function pickFeatureFile() {
+            const projects = await fetchProjects();
+            const project = projects.find(p => p.id === activeProjectId);
+            
+            if (!project?.projectPath) {
+                alert('Projekt-Pfad nicht konfiguriert. Bitte in den Projekt-Einstellungen setzen.');
+                return;
+            }
+            
+            const featuresPath = project.projectPath + '/features';
+            
+            try {
+                const response = await fetch(`/api/files?path=${encodeURIComponent(featuresPath)}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.type === 'directory' && data.children?.length > 0) {
+                        // Filter for .md files
+                        const mdFiles = data.children.filter(f => f.name.endsWith('.md'));
+                        
+                        if (mdFiles.length === 0) {
+                            alert('Keine Feature-Dateien (.md) im features/ Ordner gefunden.');
+                            return;
+                        }
+                        
+                        // Create a simple picker dialog
+                        const fileList = mdFiles.map(f => f.name).join('\\n');
+                        const selected = prompt(`Feature-Datei auswählen:\\n\\n${fileList}\\n\\nDateiname eingeben:`, mdFiles[0].name);
+                        
+                        if (selected && mdFiles.some(f => f.name === selected)) {
+                            document.getElementById('featureFileInput').value = 'features/' + selected;
+                            document.getElementById('featureFileInput').dispatchEvent(new Event('input'));
+                        } else if (selected) {
+                            alert('Datei nicht gefunden: ' + selected);
+                        }
+                    } else {
+                        alert('Keine Dateien im features/ Ordner gefunden. Bitte erst Feature-Spec anlegen.');
+                    }
+                } else {
+                    // Features folder doesn't exist
+                    const create = confirm('Der features/ Ordner existiert nicht. Möchten Sie ihn anlegen?');
+                    if (create) {
+                        // Create features folder (would need API support)
+                        alert('Bitte den Ordner manuell anlegen: ' + featuresPath);
+                    }
+                }
+            } catch (error) {
+                console.error('Error listing features:', error);
+                alert('Fehler beim Laden der Feature-Dateien');
+            }
+        }
+
+        // Open feature file directly from board (without opening task modal first)
+        async function openFeatureFileDirectly(taskId, featureFile) {
+            if (!featureFile) return;
+            
+            // Switch to file browser tab
+            switchProjectTab('files');
+            
+            // Wait a bit for the file browser to render, then navigate to the file
+            setTimeout(async () => {
+                // Get the project path
+                const projects = await fetchProjects();
+                const project = projects.find(p => p.id === activeProjectId);
+                if (!project?.projectPath) {
+                    alert('Projekt-Pfad nicht konfiguriert');
+                    return;
+                }
+                
+                // Construct full path and open the file
+                const fullPath = project.projectPath + '/' + featureFile;
+                
+                // Try to open the file directly
+                try {
+                    const response = await fetch(`/api/files?path=${encodeURIComponent(fullPath)}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.type === 'file') {
+                            // Open file in editor
+                            openFileInEditor(fullPath, data.content, data.name);
+                        }
+                    } else {
+                        alert('Feature-Datei nicht gefunden: ' + featureFile);
+                    }
+                } catch (error) {
+                    console.error('Error opening feature file:', error);
+                }
+            }, 300);
         }
 
         function closeTaskModal() {
@@ -2015,38 +2203,43 @@
             if (!currentTaskId) return;
             
             const content = document.getElementById('taskContentInput').value;
+            const featureFile = document.getElementById('featureFileInput').value.trim() || null;
             
-            if (currentTaskId.startsWith('PROJ-')) {
-                try {
-                    const response = await fetch(`/api/projects/${activeProjectId}/features/${currentTaskId}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ content })
-                    });
-                    
-                    if (response.ok) {
-                        closeTaskModal();
-                        renderBoard();
-                    } else {
-                        alert('Fehler beim Speichern');
+            // Always save task metadata including featureFile
+            try {
+                const updateData = { 
+                    description: content,
+                    featureFile: featureFile
+                };
+                
+                await fetch(`/api/projects/${activeProjectId}/tasks/${currentTaskId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updateData)
+                });
+                
+                // If there's a feature file, also try to save its content
+                if (featureFile) {
+                    try {
+                        const response = await fetch(`/api/projects/${activeProjectId}/features/${currentTaskId}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ content })
+                        });
+                        
+                        if (!response.ok) {
+                            console.log('Feature file could not be saved (might not exist yet)');
+                        }
+                    } catch (error) {
+                        console.log('Feature file save skipped:', error.message);
                     }
-                } catch (error) {
-                    console.error('Error saving feature:', error);
-                    alert('Fehler beim Speichern');
                 }
-            } else {
-                // Update regular task description
-                try {
-                    await fetch(`/api/projects/${activeProjectId}/tasks/${currentTaskId}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ description: content })
-                    });
-                    closeTaskModal();
-                    renderBoard();
-                } catch (error) {
-                    console.error('Error saving task:', error);
-                }
+                
+                closeTaskModal();
+                renderBoard();
+            } catch (error) {
+                console.error('Error saving task:', error);
+                alert('Fehler beim Speichern');
             }
         }
 
@@ -2382,7 +2575,7 @@
         
         async function initChat() {
             await checkChatGatewayStatus();
-            populateChatProjectSelect();
+            await populateChatProjectSelect();
             
             // Wenn ein Projekt aktiv ist, automatisch auswählen
             if (activeProjectId && !chatProjectId) {
@@ -2393,19 +2586,21 @@
             if (chatProjectId) {
                 document.getElementById('newSessionBtn').disabled = false;
                 await loadChatSessions();
+                const allProjects = await fetchProjects();
                 document.getElementById('chatProjectName').textContent = 
-                    projects.find(p => p.id === chatProjectId)?.name || 'Chat';
+                    allProjects.find(p => p.id === chatProjectId)?.name || 'Chat';
             } else {
                 document.getElementById('newSessionBtn').disabled = true;
                 showChatWelcome();
             }
         }
         
-        function populateChatProjectSelect() {
+        async function populateChatProjectSelect() {
+            const allProjects = await fetchProjects();
             const select = document.getElementById('chatProjectSelect');
             const currentValue = select.value;
             select.innerHTML = '<option value="">— Projekt wählen —</option>' +
-                projects.map(p => `<option value="${p.id}" ${p.id === chatProjectId ? 'selected' : ''}>${p.name}</option>`).join('');
+                allProjects.map(p => `<option value="${p.id}" ${p.id === chatProjectId ? 'selected' : ''}>${p.name}</option>`).join('');
             if (currentValue) select.value = currentValue;
         }
         
@@ -2419,8 +2614,9 @@
             
             if (chatProjectId) {
                 document.getElementById('newSessionBtn').disabled = false;
+                const allProjects = await fetchProjects();
                 document.getElementById('chatProjectName').textContent = 
-                    projects.find(p => p.id === chatProjectId)?.name || 'Chat';
+                    allProjects.find(p => p.id === chatProjectId)?.name || 'Chat';
                 await loadChatSessions();
             } else {
                 document.getElementById('newSessionBtn').disabled = true;
@@ -2435,7 +2631,8 @@
         async function openTaskInChat() {
             if (!activeProjectId || !currentTaskId) return;
             
-            const project = projects.find(p => p.id === activeProjectId);
+            const allProjects = await fetchProjects();
+            const project = allProjects.find(p => p.id === activeProjectId);
             const task = project?.tasks?.find(t => t.id === currentTaskId);
             if (!task) return;
             
@@ -2460,7 +2657,7 @@
             await createChatSession(`Task: ${task.title.slice(0, 40)}`, currentTaskId);
         }
         
-        let currentTaskId = null; // Wird in openTaskModal gesetzt
+        // currentTaskId wird oben bei den Task-Variablen definiert
         
         async function checkChatGatewayStatus() {
             try {

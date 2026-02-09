@@ -954,6 +954,7 @@ app.get('/api/projects/:projectId/chat/sessions', (req, res) => {
     const sessions = data.sessions.map(s => ({
         id: s.id,
         title: s.title,
+        taskId: s.taskId || null,
         createdAt: s.createdAt,
         messageCount: s.messages?.length || 0,
         lastMessageAt: s.messages?.length > 0 ? s.messages[s.messages.length - 1].timestamp : null
@@ -1153,7 +1154,7 @@ async function processMessageInBackground(projectId, sessionId, messageId, messa
         const timeout = setTimeout(() => {
             console.log('[CHAT] Background: Timeout after 5 min for', messageId);
             controller.abort();
-        }, 300000); // 5 min timeout
+        }, 600000); // 10 min timeout (erhöht für lange Build/Deploy Tasks)
         
         // Use NON-streaming for reliability - agent may use tools which don't stream
         const response = await fetch(`${OPENCLAW_GATEWAY_URL}/v1/chat/completions`, {

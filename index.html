@@ -1431,15 +1431,77 @@
                 
                 <div id="chatMessages" style="flex: 1; overflow-y: auto; padding: 24px;"></div>
                 
-                <form id="chatInputForm" onsubmit="sendChatMessage(event)" style="display: none; gap: 12px; padding: 16px 24px; background: var(--bg-secondary); border-top: 1px solid var(--border);">
-                    <input type="text" id="chatInput" placeholder="Nachricht eingeben..." style="flex: 1; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; color: var(--text-primary); font-size: 14px; outline: none;">
-                    <button type="submit" id="chatSendBtn" style="background: var(--accent); color: white; border: none; width: 44px; height: 44px; border-radius: 8px; cursor: pointer; font-size: 18px;">↑</button>
+                <form id="chatInputForm" onsubmit="sendChatMessage(event)" style="display: none; gap: 12px; padding: 16px 24px; background: var(--bg-secondary); border-top: 1px solid var(--border); align-items: flex-end;">
+                    <textarea id="chatInput" rows="1" placeholder="Nachricht eingeben... (Shift+Enter für neue Zeile)" style="flex: 1; background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; color: var(--text-primary); font-size: 14px; outline: none; resize: none; min-height: 44px; max-height: 40vh; overflow-y: auto; line-height: 1.5; font-family: inherit; box-sizing: border-box;"></textarea>
+                    <button type="submit" id="chatSendBtn" style="background: var(--accent); color: white; border: none; width: 44px; height: 44px; min-height: 44px; border-radius: 8px; cursor: pointer; font-size: 18px; flex-shrink: 0;">↑</button>
                 </form>
             </div>
         </div>
     </div>
 
     <script>
+        // Chat Input Auto-Grow & Keyboard Handler
+        (function() {
+            // Wait for DOM to be ready
+            const initChatInput = () => {
+                const chatInput = document.getElementById('chatInput');
+                if (!chatInput) return;
+                
+                // Auto-grow function
+                function autoGrow() {
+                    chatInput.style.height = 'auto';
+                    const newHeight = Math.min(chatInput.scrollHeight, window.innerHeight * 0.4);
+                    chatInput.style.height = newHeight + 'px';
+                }
+                
+                // Listen for input events
+                chatInput.addEventListener('input', autoGrow);
+                
+                // Handle paste events
+                chatInput.addEventListener('paste', () => {
+                    setTimeout(autoGrow, 0);
+                });
+                
+                // Keyboard handler: Enter = send, Shift+Enter or Alt+Enter = newline
+                chatInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey && !e.altKey) {
+                        e.preventDefault();
+                        const form = document.getElementById('chatInputForm');
+                        if (form) {
+                            form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                        }
+                    }
+                    // Shift+Enter and Alt+Enter allow default behavior (newline)
+                });
+                
+                // Reset height after message sent
+                const originalSendChat = window.sendChatMessage;
+                if (originalSendChat) {
+                    window.sendChatMessage = async function(event) {
+                        await originalSendChat(event);
+                        chatInput.style.height = '44px';
+                    };
+                }
+            };
+            
+            // Initialize when DOM is ready and when chat tab is opened
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initChatInput);
+            } else {
+                initChatInput();
+            }
+            
+            // Re-init when chat becomes visible (in case it's loaded dynamically)
+            const observer = new MutationObserver(() => {
+                const chatInput = document.getElementById('chatInput');
+                if (chatInput && !chatInput.dataset.autoGrowInit) {
+                    chatInput.dataset.autoGrowInit = 'true';
+                    initChatInput();
+                }
+            });
+            observer.observe(document.body, { childList: true, subtree: true });
+        })();
+
         // Mobile Sidebar Toggle
         function toggleMobileSidebar() {
             const sidebar = document.querySelector('.sidebar');
@@ -2752,7 +2814,7 @@
         function renderChatMessages() {
             const container = document.getElementById('chatMessages');
             container.innerHTML = chatMessages.map(m => `
-                <div style="display: flex; gap: 12px; margin-bottom: 16px; max-width: 85%; ${m.role === 'user' ? 'margin-left: auto; flex-direction: row-reverse;' : ''}">
+                <div style="display: flex; gap: 12px; margin-bottom: 16px; max-width: 95%; ${m.role === 'user' ? 'margin-left: auto; flex-direction: row-reverse;' : ''}">
                     <div style="width: 36px; height: 36px; border-radius: 50%; background: ${m.role === 'user' ? 'var(--accent)' : 'var(--bg-tertiary)'}; 
                                 display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;">
                         ${m.role === 'user' ? '👤' : '🤖'}
@@ -2782,6 +2844,7 @@
             if (!content || !activeChatSession || chatLoading) return;
             
             input.value = '';
+            input.style.height = '44px'; // Reset textarea height after send
             chatLoading = true;
             document.getElementById('chatSendBtn').disabled = true;
             
@@ -2792,7 +2855,7 @@
             
             // Add typing indicator
             const typingHtml = `
-                <div id="chatTyping" style="display: flex; gap: 12px; margin-bottom: 16px; max-width: 85%;">
+                <div id="chatTyping" style="display: flex; gap: 12px; margin-bottom: 16px; max-width: 95%;">
                     <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--bg-tertiary); 
                                 display: flex; align-items: center; justify-content: center; font-size: 18px;">🤖</div>
                     <div style="background: var(--bg-secondary); padding: 16px; border-radius: 12px;">
@@ -2808,12 +2871,22 @@
             document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
             
             try {
-                // Use streaming
+                // Use streaming with 5 minute timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 min
+                
                 const res = await fetch(`/api/projects/${chatProjectId}/chat/sessions/${activeChatSession.id}/messages?stream=true`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
-                    body: JSON.stringify({ content })
+                    body: JSON.stringify({ content }),
+                    signal: controller.signal
                 });
+                
+                clearTimeout(timeoutId);
+                
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+                }
                 
                 // Remove typing indicator
                 document.getElementById('chatTyping')?.remove();
@@ -2825,7 +2898,7 @@
                 
                 // Add streaming message container
                 const streamingHtml = `
-                    <div id="${streamingMsgId}" style="display: flex; gap: 12px; margin-bottom: 16px; max-width: 85%;">
+                    <div id="${streamingMsgId}" style="display: flex; gap: 12px; margin-bottom: 16px; max-width: 95%;">
                         <div style="width: 36px; height: 36px; border-radius: 50%; background: var(--bg-tertiary); 
                                     display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0;">🤖</div>
                         <div class="streaming-content" style="background: var(--bg-secondary); padding: 12px 16px; border-radius: 12px; color: var(--text-primary); line-height: 1.5;"></div>
@@ -2881,13 +2954,29 @@
             } catch (e) {
                 console.error('Error sending message:', e);
                 document.getElementById('chatTyping')?.remove();
-                chatMessages.push({
-                    id: Date.now().toString(),
-                    role: 'assistant',
-                    content: '❌ Fehler: ' + e.message,
-                    timestamp: new Date().toISOString()
-                });
-                renderChatMessages();
+                
+                // If we already have partial content, keep it and add error note
+                const streamingEl = document.querySelector(`#${streamingMsgId} .streaming-content`);
+                if (streamingEl && fullContent) {
+                    // Keep the partial response, just add error indicator
+                    fullContent += '\n\n---\n⚠️ *Verbindung unterbrochen — Antwort möglicherweise unvollständig*';
+                    streamingEl.innerHTML = marked.parse(fullContent);
+                    chatMessages.push({
+                        id: Date.now().toString(),
+                        role: 'assistant',
+                        content: fullContent,
+                        timestamp: new Date().toISOString()
+                    });
+                } else {
+                    // No content yet, show error
+                    chatMessages.push({
+                        id: Date.now().toString(),
+                        role: 'assistant',
+                        content: '❌ Fehler: ' + e.message,
+                        timestamp: new Date().toISOString()
+                    });
+                    renderChatMessages();
+                }
             } finally {
                 chatLoading = false;
                 document.getElementById('chatSendBtn').disabled = false;

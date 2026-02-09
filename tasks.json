@@ -123,8 +123,8 @@
         {
           "id": "912a3884",
           "title": "WebUI Chat-Eingabefeld und Layout-Bugs beheben",
-          "description": "## Probleme\n\n1. **Chat zu schmal** - Der Chat wird sehr schmal angezeigt, nutzt nicht die volle Breite\n2. **Eingabefeld nicht responsiv** - Erweitert sich nicht vertikal bei viel Text\n3. **Keine Mehrzeilen-Eingabe** - ALT+ENTER für neue Zeile fehlt\n4. **Mobile nicht optimiert** - Muss auf mobilen Geräten funktionieren\n5. **Max-Höhe fehlt** - Eingabefeld soll sich nur begrenzt erweitern (nicht ganzen Bildschirm verdecken)\n\n## Anforderungen\n\n- Volle Fensterbreite nutzen\n- Responsive für Desktop und Mobile\n- Textarea auto-grow mit max-height\n- ALT+ENTER für Zeilenumbruch (ENTER = senden)\n- Übersichtliche Darstellung des geschriebenen Texts",
-          "status": "in-progress",
+          "description": "## Probleme\n\n1. **Chat zu schmal** - Der Chat wird sehr schmal angezeigt, nutzt nicht die volle Breite\n2. **Eingabefeld nicht responsiv** - Erweitert sich nicht vertikal bei viel Text\n3. **Keine Mehrzeilen-Eingabe** - ALT+ENTER für neue Zeile fehlt\n4. **Mobile nicht optimiert** - Muss auf mobilen Geräten funktionieren\n5. **Max-Höhe fehlt** - Eingabefeld soll sich nur begrenzt erweitern (nicht ganzen Bildschirm verdecken)\n\n---\n\n## Status: 👀 Review\n**Bearbeitet von:** Frontend Developer\n\n### Änderungen:\n- `index.html`: Input → Textarea umgewandelt\n- Auto-Grow JavaScript implementiert\n- Keyboard-Handler: Shift+Enter = Newline, Enter = Senden\n- Message-Bubbles von 85% auf 95% Breite erhöht\n- Reset der Textarea-Höhe nach Absenden\n\n### Was wurde implementiert:\n✅ Textarea statt Input (mehrzeilig)\n✅ Auto-Grow mit max-height 40vh\n✅ Shift+Enter für neue Zeile\n✅ Alt+Enter für neue Zeile\n✅ Enter = Absenden\n✅ Breitere Message-Bubbles (95%)\n✅ Height-Reset nach Senden\n\n### Nächster Schritt:\n- Review durch Samir im Browser testen",
+          "status": "review",
           "priority": "high",
           "date": "9.2.2026",
           "featureFile": "features/KB-004-chat-input-improvements.md",

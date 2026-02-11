@@ -1,10 +1,11 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 const HOST = process.env.HOST || '0.0.0.0';
 
 app.use(express.json());
@@ -12,6 +13,31 @@ app.use(express.static(__dirname));
 
 const dataFile = path.join(__dirname, 'tasks.json');
 const agentStatusFile = path.join(__dirname, 'agent-status.json');
+
+function slugify(text) {
+    return (text || '')
+        .toString()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 50) || 'task';
+}
+
+function ensureGitBranch(projectPath, taskId, title) {
+    if (!projectPath) return null;
+    const branch = `task/${taskId}-${slugify(title)}`;
+    try {
+        execSync(`git -C "${projectPath}" rev-parse --is-inside-work-tree`, { stdio: 'ignore' });
+        const existing = execSync(`git -C "${projectPath}" branch --list "${branch}"`).toString().trim();
+        if (!existing) {
+            execSync(`git -C "${projectPath}" branch "${branch}"`, { stdio: 'ignore' });
+        }
+        return branch;
+    } catch (error) {
+        console.error(`[TASK] Failed to create branch in ${projectPath}:`, error.message);
+        return null;
+    }
+}
 
 function readData() {
     try {
@@ -96,10 +122,15 @@ app.delete('/api/projects/:id', (req, res) => {
 // POST new task to project
 app.post('/api/projects/:projectId/tasks', (req, res) => {
     const { projectId } = req.params;
-    const { title, description, status, priority, date, featureFile } = req.body;
+    const { title, description, status, priority, date, featureSpec, featureFile } = req.body;
 
     if (!title) {
         return res.status(400).json({ error: 'Title required' });
+    }
+
+    const resolvedFeatureSpec = featureSpec || featureFile || null;
+    if (!resolvedFeatureSpec) {
+        return res.status(400).json({ error: 'featureSpec is required for every task' });
     }
 
     const data = readData();
@@ -109,21 +140,25 @@ app.post('/api/projects/:projectId/tasks', (req, res) => {
         return res.status(404).json({ error: 'Project not found' });
     }
 
+    const taskId = `task-${uuidv4().slice(0, 8)}`;
+    const branch = ensureGitBranch(project.projectPath, taskId, title);
+
     const newTask = {
-        id: uuidv4().slice(0, 8),
+        id: taskId,
         title,
         description: description || '',
         status: status || 'todo',
         priority: priority || 'medium',
         date: date || new Date().toLocaleDateString('de-DE'),
-        featureFile: featureFile || null,
+        featureSpec: resolvedFeatureSpec,
+        branch: branch,
         createdAt: new Date().toISOString()
     };
 
     project.tasks.push(newTask);
     writeData(data);
 
-    console.log(`[TASK] Created: "${title}" in "${project.name}"`);
+    console.log(`[TASK] Created: "${title}" in "${project.name}"${branch ? ` (branch: ${branch})` : ''}`);
     res.status(201).json(newTask);
 });
 
@@ -146,7 +181,25 @@ app.put('/api/projects/:projectId/tasks/:taskId', (req, res) => {
     }
 
     const oldStatus = project.tasks[taskIndex].status;
-    project.tasks[taskIndex] = { ...project.tasks[taskIndex], ...updates };
+    const currentTask = project.tasks[taskIndex];
+
+    if (updates.status === 'in-progress') {
+        const effectiveFeatureSpec = updates.featureSpec || updates.featureFile || currentTask.featureSpec;
+        if (!effectiveFeatureSpec) {
+            return res.status(400).json({ error: 'featureSpec is required before starting a task' });
+        }
+
+        if (!currentTask.branch && project.projectPath) {
+            const createdBranch = ensureGitBranch(project.projectPath, currentTask.id, currentTask.title);
+            if (createdBranch) {
+                updates.branch = createdBranch;
+            }
+        }
+
+        updates.featureSpec = effectiveFeatureSpec;
+    }
+
+    project.tasks[taskIndex] = { ...currentTask, ...updates };
     writeData(data);
 
     if (updates.status && updates.status !== oldStatus) {

@@ -1,11 +1,16 @@
 # OpenClaw React Board
 
-Multi-Project Kanban Board mit integriertem File Browser und Context-Speicher. Optimiert für Clawdbot/openclaw Agent-Workflows.
+**Version:** 1.1.1
+
+Multi-Project Kanban Board mit integriertem File Browser und Context-Speicher. Optimiert für OpenClaw Agent-Workflows.
 
 ## Features
 
 - **Multi-Projekt Support** - Verwalte mehrere Projekte mit eigenem Kanban Board
 - **Kanban Board** - 4 Spalten: Offen, In Arbeit, Review, Erledigt
+- **Task-Branch Enforcement** - Automatischer Git-Branch pro Task (Feld `branch`)
+- **Requirements Template** - Pflicht-Template für Requirements + append-only Status Updates
+- **FeatureSpec Pflicht** - `featureSpec` muss bei Task-Erstellung gesetzt sein
 - **File Browser** - Integrierter Datei-Explorer mit Syntax Highlighting
 - **Context-Speicher** - Zentrale Ablage für Workspace-Konfiguration (AGENTS.md, SOUL.md, etc.)
 - **Activity Log** - Chronologische Ansicht aller Projekt-Aktivitäten
@@ -18,13 +23,13 @@ Multi-Project Kanban Board mit integriertem File Browser und Context-Speicher. O
 ### Installation
 
 ```bash
-git clone https://github.com/AlexPEClub/openclaw_react_board.git
+git clone https://github.com/samir-brkic/openclaw_react_board.git
 cd openclaw_react_board
 npm install
 npm start
 ```
 
-Das Board läuft dann auf: http://localhost:3000
+Das Board läuft dann auf: http://localhost:4000
 
 ### Clawdbot/openclaw Agent Installation
 
@@ -55,7 +60,7 @@ docker run -p 3000:3000 -v $(pwd)/data:/app/data openclaw-kanban
 ### Environment Variables
 
 ```bash
-PORT=3000                                    # Server Port (default: 3000)
+PORT=4000                                    # Server Port (default: 4000)
 OPENCLAW_WORKSPACE=/data/.openclaw/workspace # Context-Files Pfad (default: /data/.openclaw/workspace)
 ```
 
@@ -117,9 +122,10 @@ OPENCLAW_WORKSPACE=/custom/path PORT=3000 node app.js
   "projectPath": "/home/node/clawd/projects/mein-projekt",
   "tasks": [
     {
-      "id": "PROJ-1",
+      "id": "task-abc12345",
       "title": "Feature Name",
-      "featureFile": "PROJ-1-feature-name.md",
+      "featureSpec": "features/PROJ-1-feature-name.md",
+      "branch": "task/task-abc12345-feature-name",
       "status": "todo|in-progress|review|done",
       "priority": "high|medium|low"
     }
@@ -131,7 +137,7 @@ OPENCLAW_WORKSPACE=/custom/path PORT=3000 node app.js
 
 ### Feature-Specs verknüpfen
 
-Feature-Spezifikationen im `features/`-Ordner des Projekts ablegen und per `featureFile` im Task verknüpfen:
+Feature-Spezifikationen im `features/`-Ordner des Projekts ablegen und per **`featureSpec`** im Task verknüpfen (**Pflichtfeld**):
 
 ```
 /projects/mein-projekt/features/PROJ-1-user-auth.md
@@ -143,27 +149,28 @@ Namenskonvention: `PROJ-{nummer}-{feature-name}.md`
 
 ```bash
 # Projekte
-GET    /api/projects              # Alle Projekte abrufen
-POST   /api/projects              # Neues Projekt erstellen
-GET    /api/projects/:id          # Einzelnes Projekt
+GET    /api/projects                          # Alle Projekte abrufen
+POST   /api/projects                          # Neues Projekt erstellen
+GET    /api/projects/:projectId               # Einzelnes Projekt
 
 # Tasks
-POST   /api/projects/:id/tasks    # Task hinzufügen
-PUT    /api/tasks/:id             # Task aktualisieren (z.B. Status ändern)
+POST   /api/projects/:projectId/tasks         # Task erstellen (featureSpec Pflicht)
+PUT    /api/projects/:projectId/tasks/:taskId # Task aktualisieren (append-only für description)
+DELETE /api/projects/:projectId/tasks/:taskId # Task löschen
 
 # Context & Files
-GET    /api/context-files         # Context-Dateien auflisten
-GET    /api/files/:projectId/*    # File Browser API
+GET    /api/context-files                     # Context-Dateien auflisten
+GET    /api/files/:projectId/*                # File Browser API
 
 # Activity
-GET    /api/activity              # Activity Log
+GET    /api/activity                          # Activity Log
 ```
 
 ### Beispiele
 
 ```bash
 # Projekt mit projectPath erstellen
-curl -X POST http://localhost:3000/api/projects \
+curl -X POST http://localhost:4000/api/projects \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Mein Projekt",
@@ -171,17 +178,17 @@ curl -X POST http://localhost:3000/api/projects \
     "projectPath": "/home/node/clawd/projects/mein-projekt"
   }'
 
-# Task Status ändern
-curl -X PUT http://localhost:3000/api/tasks/PROJ-1 \
+# Task Status ändern (append-only Update)
+curl -X PUT http://localhost:4000/api/projects/{projectId}/tasks/{taskId} \
   -H "Content-Type: application/json" \
-  -d '{"status": "in-progress"}'
+  -d '{"description": "- ✅ Implementiert XYZ\n- 🔄 Offenes Thema ABC"}'
 
-# Task mit Feature-File erstellen
-curl -X POST http://localhost:3000/api/projects/{projectId}/tasks \
+# Task mit featureSpec erstellen (Pflicht)
+curl -X POST http://localhost:4000/api/projects/{projectId}/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "title": "User Authentication",
-    "featureFile": "PROJ-1-user-auth.md",
+    "featureSpec": "features/PROJ-1-user-auth.md",
     "status": "todo",
     "priority": "high"
   }'

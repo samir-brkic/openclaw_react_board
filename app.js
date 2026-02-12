@@ -443,42 +443,43 @@ app.get('/api/projects/:projectId/features/:taskId', (req, res) => {
         return res.status(400).json({ error: 'Kein Projektpfad konfiguriert' });
     }
 
-    // Find the task to get its featureFile
+    // Find the task to get its featureSpec
     const task = project.tasks?.find(t => t.id === taskId);
     if (!task) {
         return res.status(404).json({ error: 'Task nicht gefunden' });
     }
 
-    if (!task.featureFile) {
-        return res.status(404).json({ error: 'Keine Feature-Datei verknüpft' });
+    const featureSpec = task.featureSpec || task.featureFile;
+    if (!featureSpec) {
+        return res.status(404).json({ error: 'Keine Feature-Spec verknüpft' });
     }
 
     try {
-        // featureFile can be stored as "features/KB-002-name.md" OR just "KB-002-name.md"
+        // featureSpec can be stored as "features/KB-002-name.md" OR just "KB-002-name.md"
         // Try to resolve it intelligently
-        let filePath = path.join(project.projectPath, task.featureFile);
+        let filePath = path.join(project.projectPath, featureSpec);
         
         // If not found, try adding features/ prefix
-        if (!fs.existsSync(filePath) && !task.featureFile.startsWith('features/')) {
-            const withPrefix = path.join(project.projectPath, 'features', task.featureFile);
+        if (!fs.existsSync(filePath) && !featureSpec.startsWith('features/')) {
+            const withPrefix = path.join(project.projectPath, 'features', featureSpec);
             if (fs.existsSync(withPrefix)) {
                 filePath = withPrefix;
             }
         }
         
         if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ error: 'Feature-Datei nicht gefunden', path: task.featureFile });
+            return res.status(404).json({ error: 'Feature-Datei nicht gefunden', path: featureSpec });
         }
 
         const content = fs.readFileSync(filePath, 'utf8');
-        const filename = path.basename(task.featureFile);
+        const filename = path.basename(featureSpec);
 
         res.json({ 
             id: taskId,
             filename: filename,
             content: content,
             path: filePath,
-            featureFile: task.featureFile
+            featureSpec
         });
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -500,35 +501,36 @@ app.put('/api/projects/:projectId/features/:taskId', (req, res) => {
         return res.status(400).json({ error: 'Kein Projektpfad konfiguriert' });
     }
 
-    // Find the task to get its featureFile
+    // Find the task to get its featureSpec
     const task = project.tasks?.find(t => t.id === taskId);
     if (!task) {
         return res.status(404).json({ error: 'Task nicht gefunden' });
     }
 
-    if (!task.featureFile) {
-        return res.status(404).json({ error: 'Keine Feature-Datei verknüpft' });
+    const featureSpec = task.featureSpec || task.featureFile;
+    if (!featureSpec) {
+        return res.status(404).json({ error: 'Keine Feature-Spec verknüpft' });
     }
 
     try {
-        // featureFile can be stored as "features/KB-002-name.md" OR just "KB-002-name.md"
+        // featureSpec can be stored as "features/KB-002-name.md" OR just "KB-002-name.md"
         // Try to resolve it intelligently
-        let filePath = path.join(project.projectPath, task.featureFile);
+        let filePath = path.join(project.projectPath, featureSpec);
         
         // If not found, try adding features/ prefix
-        if (!fs.existsSync(filePath) && !task.featureFile.startsWith('features/')) {
-            const withPrefix = path.join(project.projectPath, 'features', task.featureFile);
+        if (!fs.existsSync(filePath) && !featureSpec.startsWith('features/')) {
+            const withPrefix = path.join(project.projectPath, 'features', featureSpec);
             if (fs.existsSync(withPrefix)) {
                 filePath = withPrefix;
             }
         }
         
         if (!fs.existsSync(filePath)) {
-            return res.status(404).json({ error: 'Feature-Datei nicht gefunden', path: task.featureFile });
+            return res.status(404).json({ error: 'Feature-Datei nicht gefunden', path: featureSpec });
         }
 
         fs.writeFileSync(filePath, content, 'utf8');
-        const filename = path.basename(task.featureFile);
+        const filename = path.basename(featureSpec);
 
         // Update task title from first line if desired
         const firstLine = content.split('\n')[0].replace(/^#+\s*/, '');
@@ -594,14 +596,17 @@ app.post('/api/projects/:projectId/sync-features', (req, res) => {
             const existingTask = project.tasks.find(t => t.id === `PROJ-${featureNum}`);
             
             if (!existingTask) {
+                const taskId = `PROJ-${featureNum}`;
+                const branch = ensureGitBranch(project.projectPath, taskId, title);
                 const newTask = {
-                    id: `PROJ-${featureNum}`,
+                    id: taskId,
                     title: title,
                     description: `Feature specification - Ready for Architecture`,
                     status: 'review',
                     priority: 'high',
                     date: new Date().toLocaleDateString('de-DE'),
-                    featureFile: file,
+                    featureSpec: `features/${file}`,
+                    branch: branch,
                     createdAt: new Date().toISOString()
                 };
                 
@@ -1209,7 +1214,7 @@ ${project.docs ? `\n### Projekt-Dokumentation\n${project.docs}\n` : ''}
 - **ID:** ${task.id}
 - **Status:** ${task.status}
 - **Priorität:** ${task.priority || 'medium'}
-${task.featureFile ? `- **Feature-Spec:** ${task.featureFile} (WICHTIG: Lies diese Datei für Details!)` : ''}
+${(task.featureSpec || task.featureFile) ? `- **Feature-Spec:** ${task.featureSpec || task.featureFile} (WICHTIG: Lies diese Datei für Details!)` : ''}
 
 ### Task-Beschreibung
 ${task.description || 'Keine Beschreibung'}

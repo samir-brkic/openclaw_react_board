@@ -1695,12 +1695,12 @@
                 columnEl.className = 'column';
 
                 let tasksHtml = columnTasks.map(task => `
-                    <div class="task" onclick="openTaskModal('${task.id}')" ${task.featureFile ? 'data-feature="true"' : ''}>
+                    <div class="task" onclick="openTaskModal('${task.id}')" ${(task.featureSpec || task.featureFile) ? 'data-feature="true"' : ''}>
                         <div class="task-title">${task.title}</div>
                         ${task.description ? `<div class="task-description">${task.description}</div>` : ''}
                         <div class="task-meta">
                             ${task.priority ? `<span class="task-priority priority-${task.priority}">${task.priority}</span>` : ''}
-                            ${task.featureFile ? `<span class="feature-file-link" onclick="event.stopPropagation(); openFeatureFileDirectly('${task.id}', '${task.featureFile}')" style="color: var(--accent); cursor: pointer; text-decoration: underline;" title="Feature-Spec im File Browser öffnen">📄 ${task.featureFile}</span>` : ''}
+                            ${(task.featureSpec || task.featureFile) ? `<span class="feature-file-link" onclick="event.stopPropagation(); openFeatureFileDirectly('${task.id}', '${task.featureSpec || task.featureFile}')" style="color: var(--accent); cursor: pointer; text-decoration: underline;" title="Feature-Spec im File Browser öffnen">📄 ${task.featureSpec || task.featureFile}</span>` : ''}
                             ${task.date ? `<span>${task.date}</span>` : ''}
                         </div>
                     </div>
@@ -1736,6 +1736,11 @@
         }
 
         async function addTask(columnId, title) {
+            const featureSpec = prompt('Feature-Spec Pfad (z.B. features/PROJ-001-foo.md):');
+            if (!featureSpec || !featureSpec.trim()) {
+                return alert('Feature-Spec ist Pflicht. Task wurde nicht erstellt.');
+            }
+
             try {
                 await fetch(`/api/projects/${activeProjectId}/tasks`, {
                     method: 'POST',
@@ -1743,7 +1748,8 @@
                     body: JSON.stringify({
                         title,
                         status: columnId,
-                        priority: 'medium'
+                        priority: 'medium',
+                        featureSpec: featureSpec.trim()
                     })
                 });
                 renderBoard();
@@ -2105,16 +2111,17 @@
             const task = project?.tasks?.find(t => t.id === taskId);
             currentTask = task;
 
-            // Setup Feature-File Input
+            // Setup Feature-Spec Input
             const featureFileInput = document.getElementById('featureFileInput');
             const openFeatureBtn = document.getElementById('openFeatureBtn');
             const featureFileStatus = document.getElementById('featureFileStatus');
             
+            const currentFeatureSpec = task?.featureSpec || task?.featureFile || '';
             if (task) {
-                featureFileInput.value = task.featureFile || '';
+                featureFileInput.value = currentFeatureSpec;
                 
-                // Show/hide open button based on whether featureFile is set
-                if (task.featureFile) {
+                // Show/hide open button based on whether featureSpec is set
+                if (currentFeatureSpec) {
                     openFeatureBtn.style.display = 'inline-block';
                     featureFileStatus.textContent = '✓ verknüpft';
                     featureFileStatus.style.color = 'var(--success)';
@@ -2138,8 +2145,8 @@
                 }
             };
 
-            // Only load feature file if the task has one defined
-            if (task?.featureFile) {
+            // Only load feature spec if the task has one defined
+            if (currentFeatureSpec) {
                 try {
                     const response = await fetch(`/api/projects/${activeProjectId}/features/${taskId}`);
                     if (response.ok) {
@@ -2162,7 +2169,7 @@
                     document.getElementById('taskModal').classList.add('active');
                 }
             } else if (task) {
-                // Regular task or task without feature file - just show info
+                // Regular task or task without feature spec - just show info
                 document.getElementById('taskModalTitle').textContent = task.title;
                 document.getElementById('taskContentInput').value = task.description || '';
                 document.getElementById('taskModal').classList.add('active');
@@ -2282,13 +2289,17 @@
             if (!currentTaskId) return;
             
             const content = document.getElementById('taskContentInput').value;
-            const featureFile = document.getElementById('featureFileInput').value.trim() || null;
+            const featureSpec = document.getElementById('featureFileInput').value.trim() || null;
+
+            if (!featureSpec) {
+                return alert('Feature-Spec ist Pflicht. Bitte zuerst verknüpfen.');
+            }
             
-            // Always save task metadata including featureFile
+            // Always save task metadata including featureSpec
             try {
                 const updateData = { 
                     description: content,
-                    featureFile: featureFile
+                    featureSpec: featureSpec
                 };
                 
                 await fetch(`/api/projects/${activeProjectId}/tasks/${currentTaskId}`, {
@@ -2297,8 +2308,8 @@
                     body: JSON.stringify(updateData)
                 });
                 
-                // If there's a feature file, also try to save its content
-                if (featureFile) {
+                // If there's a feature spec, also try to save its content
+                if (featureSpec) {
                     try {
                         const response = await fetch(`/api/projects/${activeProjectId}/features/${currentTaskId}`, {
                             method: 'PUT',
@@ -2733,7 +2744,8 @@
             // Prüfe ob Sessions für diesen Task existieren
             try {
                 const res = await fetch(`/api/projects/${activeProjectId}/chat/sessions`);
-                const sessions = await res.json();
+                const data = await res.json();
+                const sessions = data.sessions || [];
                 const taskSessions = sessions.filter(s => s.taskId === currentTaskId);
                 
                 console.log('[DEBUG] Found sessions for task:', taskSessions.length);

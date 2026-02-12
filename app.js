@@ -14,6 +14,38 @@ app.use(express.static(__dirname));
 const dataFile = path.join(__dirname, 'tasks.json');
 const agentStatusFile = path.join(__dirname, 'agent-status.json');
 
+const TASK_TEMPLATE = `## Ziel / Problem
+- ...
+
+## Ist-Zustand (Codebasis)
+- Dateien/Module:
+- Relevante Stellen:
+
+## Soll-Zustand
+- ...
+
+## Scope
+- In-Scope:
+- Out-of-Scope:
+
+## Akzeptanzkriterien
+- [ ] ...
+- [ ] ...
+
+## Risiken / Abhängigkeiten
+- ...
+
+## Betroffene Bereiche
+- Backend / Frontend / DB / Infra
+
+---
+
+## Status Updates (NIE Requirements überschreiben)
+**Update 1 (Datum/Autor):**
+- ✅ Was wurde gemacht + warum
+- 🔄 Was offen bleibt
+- 🧪 Tests/Verifikation`;
+
 function slugify(text) {
     return (text || '')
         .toString()
@@ -37,6 +69,23 @@ function ensureGitBranch(projectPath, taskId, title) {
         console.error(`[TASK] Failed to create branch in ${projectPath}:`, error.message);
         return null;
     }
+}
+
+function normalizeDescription(description) {
+    if (!description || !description.trim()) return TASK_TEMPLATE;
+    if (description.includes('## Ziel / Problem')) return description;
+    return `${TASK_TEMPLATE}\n\n## Zusätzliche Notizen\n${description.trim()}`;
+}
+
+function ensureStatusUpdatesSection(description) {
+    if (description.includes('## Status Updates')) return description;
+    return `${description}\n\n---\n\n## Status Updates (NIE Requirements überschreiben)`;
+}
+
+function appendStatusUpdate(description, newText) {
+    const base = ensureStatusUpdatesSection(description || '');
+    const ts = new Date().toISOString().replace('T', ' ').slice(0, 16);
+    return `${base}\n\n**Update (${ts}):**\n${newText.trim()}`;
 }
 
 function readData() {
@@ -142,11 +191,12 @@ app.post('/api/projects/:projectId/tasks', (req, res) => {
 
     const taskId = `task-${uuidv4().slice(0, 8)}`;
     const branch = ensureGitBranch(project.projectPath, taskId, title);
+    const normalizedDescription = normalizeDescription(description);
 
     const newTask = {
         id: taskId,
         title,
-        description: description || '',
+        description: normalizedDescription,
         status: status || 'todo',
         priority: priority || 'medium',
         date: date || new Date().toLocaleDateString('de-DE'),
@@ -183,10 +233,18 @@ app.put('/api/projects/:projectId/tasks/:taskId', (req, res) => {
     const oldStatus = project.tasks[taskIndex].status;
     const currentTask = project.tasks[taskIndex];
 
+    if (updates.description) {
+        updates.description = appendStatusUpdate(currentTask.description || '', updates.description);
+    }
+
     if (updates.status === 'in-progress') {
         const effectiveFeatureSpec = updates.featureSpec || updates.featureFile || currentTask.featureSpec;
         if (!effectiveFeatureSpec) {
             return res.status(400).json({ error: 'featureSpec is required before starting a task' });
+        }
+
+        if (!(currentTask.description || '').includes('## Ziel / Problem')) {
+            return res.status(400).json({ error: 'task requirements template is missing (## Ziel / Problem)' });
         }
 
         if (!currentTask.branch && project.projectPath) {
